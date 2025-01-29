@@ -1,0 +1,10 @@
+La V2 règle plusieurs problèmes:
+
+1. Les vis disponibles n'étaient pas assez longues pour traverser le print entier et se visser dans les servos
+Solution: Réduction des épaisseurs proche des vis
+
+2. Le Arm3 pouvait rentrer en collision avec le Arm1
+Solution: modification du Arm1 et Arm2 pour empècher la collision, vérifié avec un assemblage sur Onshape.
+
+3. Aucune tolérance avait été appliqué au rotor, rendant l'assemblage difficile.
+Solution: application de tolérance de 0.15mm sur le rayon
