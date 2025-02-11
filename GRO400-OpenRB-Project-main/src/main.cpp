@@ -7,6 +7,7 @@
 // N'oubliez-pas de configurer votre port série pour cette console à 115200 bauds.
 
 #include <Dynamixel2Arduino.h>
+#include <math.h>
 
 // Please modify it to suit your hardware.
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560) // When using DynamixelShield
@@ -44,14 +45,14 @@
   const int DXL_DIR_PIN = 2; // DYNAMIXEL Shield DIR PIN
 #endif
  
-// TODO: À changer selon l'ID de votre moteur :
+
 const uint8_t DXL_ID1 = 20;
 const uint8_t DXL_ID2 = 15;
 const uint8_t DXL_ID3 = 40; 
 
-const uint8_t ANGLE_0_DXL_ID1 = 0; //a verif
-const uint8_t ANGLE_0_DXL_ID2 = 0; //a verif
-const uint8_t ANGLE_0_DXL_ID3 = 0; //a verif
+const uint8_t ANGLE_0_DXL_ID1 = 177; //a verif
+const uint8_t ANGLE_0_DXL_ID2 = 188; //a verif
+const uint8_t ANGLE_0_DXL_ID3 = 180; //a verif
 
 const float DXL_PROTOCOL_VERSION = 2.0;
 
@@ -59,6 +60,119 @@ Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 
 //This namespace is required to use Control table item names
 using namespace ControlTableItem;
+
+
+
+float qA = 0.0 ; //degree
+float qB = 0.0 ;
+float qC = 0.0 ;
+
+float theta_x = 0; //degree
+float theta_y = 0;
+float theta_z = 0 ;
+
+float modMoteur1 = 0;
+float modMoteur2 = 0;
+float modMoteur3 = 0;
+
+float DegToRad(float angle) {
+  angle = ((angle) * M_PI / 180.0);
+  return angle; // Convertit les degrés en radians
+}
+
+float sinDeg(float angle) {
+    return sin(DegToRad(angle)); // Convertit en radians et applique sin()
+}
+float cosDeg(float angle) {
+    return cos(DegToRad(angle)); // Convertit en radians et applique cos()
+}
+
+/*float MatriceMoteurs[3][3] = {{(cosDeg(qC)*cosDeg(qA) - sinDeg(qC)*sin(qB)*sin(qA)), (cos(qC)*sin(qA) + sin(qC)*sin(qB)*cos(qA)), (-sin(qC)*cos(qB))}, {(-cos(qB)*sin(qA)), (cos(qB)*cos(qA)), (sin(qB))}, {(sin(qC)*cos(qA)+cos(qC)*sin(qB)*sin(qA)), (sin(qC)*sin(qA)-cos(qC)*sin(qB)*cos(qA)), (cos(qC)*cos(qB))}};
+float MatriceAccelero[3][3] = {{(cos(theta_y)*cos(theta_z)- sin(theta_y)*sin(theta_x)*cos(theta_z)), (-cos(theta_x)*sin(theta_z)), (sin(theta_y)*cos(theta_z)+cos(theta_y)*sin(theta_x)*sin(theta_z))}, {(cos(theta_y)*sin(theta_z)+sin(theta_y)*sin(theta_x)*cos(theta_z)), (cos(theta_x)*cos(theta_z)), (sin(theta_y)*sin(theta_z)-cos(theta_y)*sin(theta_x)*cos(theta_z))}, {(-sin(theta_y)*cos(theta_x)), (sin(theta_x)), (cos(theta_y)*cos(theta_x))}};
+float MatriceGimbal[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};*/
+
+void afficherMatrice(float matrice33[3][3]){
+    for (int i = 0; i < 3; i++) {  
+        for (int j = 0; j < 3; j++) {  
+            Serial.print(matrice33[i][j]);
+            Serial.print(" ");
+        }
+        Serial.println();  
+    }
+}
+
+void multiplierMatrices() {
+  //Lecture angle des moteurs
+  qA = dxl.getPresentPosition(DXL_ID1, UNIT_DEGREE) - ANGLE_0_DXL_ID1;
+  qB = dxl.getPresentPosition(DXL_ID2, UNIT_DEGREE) - ANGLE_0_DXL_ID2;
+  qC = dxl.getPresentPosition(DXL_ID3, UNIT_DEGREE)- ANGLE_0_DXL_ID3;
+  Serial.println(qA);
+  Serial.println(qB);
+  Serial.println(qC);
+
+  float MatriceMoteurs[3][3] = {
+    {(cosDeg(qC) * cosDeg(qA) - sinDeg(qC) * sinDeg(qB) * sinDeg(qA)), 
+     (cosDeg(qC) * sinDeg(qA) + sinDeg(qC) * sinDeg(qB) * cosDeg(qA)), 
+     (-sinDeg(qC) * cosDeg(qB))},
+
+    {(-cosDeg(qB) * sinDeg(qA)), 
+     (cosDeg(qB) * cosDeg(qA)), 
+     (sinDeg(qB))},
+
+    {(sinDeg(qC) * cosDeg(qA) + cosDeg(qC) * sinDeg(qB) * sinDeg(qA)), 
+     (sinDeg(qC) * sinDeg(qA) - cosDeg(qC) * sinDeg(qB) * cosDeg(qA)), 
+     (cosDeg(qC) * cosDeg(qB))}
+  };
+
+  float MatriceAccelero[3][3] = {
+    {(cosDeg(theta_y) * cosDeg(theta_z) - sinDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z)), 
+     (-cosDeg(theta_x) * sinDeg(theta_z)), 
+     (sinDeg(theta_y) * cosDeg(theta_z) + cosDeg(theta_y) * sinDeg(theta_x) * sinDeg(theta_z))},
+
+    {(cosDeg(theta_y) * sinDeg(theta_z) + sinDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z)), 
+     (cosDeg(theta_x) * cosDeg(theta_z)), 
+     (sinDeg(theta_y) * sinDeg(theta_z) - cosDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z))},
+
+    {(-sinDeg(theta_y) * cosDeg(theta_x)), 
+     (sinDeg(theta_x)), 
+     (cosDeg(theta_y) * cosDeg(theta_x))}
+  };
+
+  float MatriceGimbal[3][3] = {
+    {0.0, 0.0, 0.0}, 
+    {0.0, 0.0, 0.0}, 
+    {0.0, 0.0, 0.0}
+  };
+
+
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            MatriceGimbal[i][j] = 0;
+            for (int k = 0; k < 3; k++) {
+                MatriceGimbal[i][j] += MatriceMoteurs[i][k] * MatriceAccelero[k][j];
+            }
+        }
+    }
+  afficherMatrice(MatriceMoteurs);
+
+
+    modMoteur3 = atan2(-MatriceGimbal[2][0], sqrt(pow(MatriceGimbal[0][0], 2) + pow(MatriceGimbal[1][0], 2)));
+    modMoteur2 = atan2(MatriceGimbal[2][1], MatriceGimbal[2][2]);
+    modMoteur1 = atan2(MatriceGimbal[1][0], MatriceGimbal[0][0]);
+
+  // Conversion en degrés
+    modMoteur1 *= 180.0 / M_PI;
+    modMoteur2 *= 180.0 / M_PI;
+    modMoteur3 *= 180.0 / M_PI;
+
+  Serial.println(modMoteur1);
+  Serial.println(modMoteur2);
+  Serial.println(modMoteur3);
+ 
+}
+
+
+
 
 void setup() {
   // put your setup code here, to run once:
@@ -106,56 +220,41 @@ void setup() {
   dxl.torqueOn(DXL_ID3);
 
   // Limit the maximum velocity in Position Control Mode. Use 0 for Max speed
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 100);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 100);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 100);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1,50);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 50);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 50);
 
   DEBUG_SERIAL.println("Super Setup done.");
   DEBUG_SERIAL.print("Last error code: ");
   DEBUG_SERIAL.println(dxl.getLastLibErrCode());
+
+
+  dxl.setGoalPosition(DXL_ID1, ANGLE_0_DXL_ID1 + 0, UNIT_DEGREE);
+  dxl.setGoalPosition(DXL_ID2, ANGLE_0_DXL_ID2 + 0, UNIT_DEGREE);
+  dxl.setGoalPosition(DXL_ID3, ANGLE_0_DXL_ID3 + 0, UNIT_DEGREE);
+  delay(2000);
+
+
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  
-  // Please refer to e-Manual(http://emanual.robotis.com/docs/en/parts/interface/dynamixel_shield/) for available range of value. 
-  // Set Goal Position in RAW value
-  //dxl.setGoalPosition(DXL_ID, 0);
-  //dxl.setGoalPosition(DXL_ID2, 0);
-  //int i_present_position = 0;
-  //float f_present_position = 0.0;
 
-  /*while (abs(1000 - i_present_position) > 10)
-  {
-    i_present_position = dxl.getPresentPosition(DXL_ID);
-    DEBUG_SERIAL.print("Present_Position(raw) : ");
-    DEBUG_SERIAL.println(i_present_position);
+  multiplierMatrices();
+
+  dxl.setGoalPosition(DXL_ID1, ANGLE_0_DXL_ID1 + qA + modMoteur1, UNIT_DEGREE);
+  dxl.setGoalPosition(DXL_ID2, ANGLE_0_DXL_ID2 + qB + modMoteur2, UNIT_DEGREE);
+  dxl.setGoalPosition(DXL_ID3, ANGLE_0_DXL_ID3 + qC + modMoteur3, UNIT_DEGREE);
+  //delay(100);
+/*if (theta_x > 90) {
+    theta_x = 0;
+    theta_y = 0;
+    theta_z = 0;
   }
-  delay(1000);
-
-  // Set Goal Position in DEGREE value
-  dxl.setGoalPosition(DXL_ID, 5.7, UNIT_DEGREE);
-  dxl.setGoalPosition(DXL_ID2, 5.7, UNIT_DEGREE);
-  
-  while (abs(5.7 - f_present_position) > 2.0)
-  {
-    f_present_position = dxl.getPresentPosition(DXL_ID, UNIT_DEGREE);
-    DEBUG_SERIAL.print("Present_Position(degree) : ");
-    DEBUG_SERIAL.println(f_present_position);
+  else {
+    theta_x ++;
+    theta_y ++;
+    theta_z ++;
   }*/
-  delay(1000);
-  dxl.setGoalPosition(DXL_ID1, ANGLE_0_DXL_ID1 + 180, UNIT_DEGREE);
-  delay(1000);
-  dxl.setGoalPosition(DXL_ID2, ANGLE_0_DXL_ID2 + 180, UNIT_DEGREE);
-  delay(1000);
-  dxl.setGoalPosition(DXL_ID3, ANGLE_0_DXL_ID3 + 180, UNIT_DEGREE);
-
-  delay(1000);
-
-  /*dxl.setGoalPosition(DXL_ID1, ANGLE_0_DXL_ID1 + 20, UNIT_DEGREE);
-  delay(1000);
-  dxl.setGoalPosition(DXL_ID2, ANGLE_0_DXL_ID2 + 20, UNIT_DEGREE);
-  delay(1000);
-  dxl.setGoalPosition(DXL_ID3, ANGLE_0_DXL_ID3 + 20, UNIT_DEGREE);*/
-
+  
+  
 }
