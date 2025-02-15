@@ -84,6 +84,18 @@ float modMoteur1 = 0;
 float modMoteur2 = 0;
 float modMoteur3 = 0;
 
+//Modifier ces valeurs selon le position 0, 0, 0 de l'IMU
+float initialYaw = 0;
+float initialPitch = 0;
+float initialRoll = 0;
+
+//Initialisation des variables pour tenir en memoire la derniere position du moteur pour savoir si on doit envoyer une nouvelle position ou le seuil n'est pas dépassé
+float lastAngle1 = 0;
+float lastAngle2 = 0;
+float lastAngle3 = 0;
+
+int seuil = 8; //degree
+
  // Définition d'une structure pour les quaternions
 struct Quaternion {
     float w, x, y, z;
@@ -145,8 +157,6 @@ int motorYaw = 0;
 int motorPitch = 0;
 int motorRoll = 0;
 
-//float lastYaw = 0, lastPitch = 0, lastRoll = 0;  // Derniers angles des moteurs
-
 void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC, float qB ) {
     // Convertir en quaternion
     Quaternion q_g = eulerToQuaternion(yaw, pitch, roll);
@@ -169,12 +179,12 @@ void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC,
     //lastPitch = pitchComp;
     //lastRoll = rollComp;
 
-    Serial.println("yawComp: ");
+    /*Serial.println("yawComp: ");
     Serial.println(yawComp);
     Serial.println("pitchComp: ");
     Serial.println(pitchComp);
     Serial.println("rollComp: ");
-    Serial.println(rollComp);
+    Serial.println(rollComp);*/
 
     // Convertir en position moteur (0 à 360°)
     motorYaw = int(fmod((yawComp + qA ), 360));
@@ -188,33 +198,31 @@ void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC,
 
 }
 
-void getAngle(int Ax, int Ay, int Az, int Gz) {
+void getAngle(int Ax, int Ay, int Az, int Gy) {
  double x = Ax;
  double y = Ay;
  double z = Az;
- pitch = atan(x / sqrt((y * y) + (z * z)));
- roll = atan(y / sqrt((x * x) + (z * z)));
- yaw = atan(z / sqrt((x * x) + (y * y)));
- pitch = pitch * (180.0 / PI);
- roll = roll * (180.0 / PI) ;
- yaw = yaw * (180.0 / PI) ;
+ 
+ pitch = atan(z / sqrt((y * y))) ;
+
+ roll = atan(x / sqrt((y * y)));
+
+ //yaw = atan(x / sqrt((z * z)+(y * y)));
+
+ double currentTime = millis() / 1000.0; // Temps en secondes
+ double deltaTime = currentTime - previousTime;
+ previousTime = currentTime;
+ Serial.println("deltaTime: ");
+Serial.println(deltaTime);
+//Intégrer la vitesse angulaire pour obtenir l'angle yaw
+  float yaw_rad =+ (-Gy/600) * deltaTime;
+
+ pitch = pitch * (180.0 / PI) + initialPitch;
+ roll = roll * (180.0 / PI) + initialRoll;
+ yaw = yaw_rad * (180.0 / PI) + initialYaw;
  
 
- Serial.println("pitch: ");
-  Serial.println(pitch);
-
- /*double currentTime = millis() / 1000.0; // Temps en secondes
-    double deltaTime = currentTime - previousTime;
-    previousTime = currentTime;
-
-    yaw += Gz * deltaTime;*/ // Intégration de la vitesse angulaire pour obtenir l'angle
-
-    // Normalisation de l'angle yaw pour rester entre -180 et 180 degrés
-    /*if (yaw > 180.0) yaw -= 360.0;
-    if (yaw < -180.0) yaw += 360.0;*/
 }
-
-
 
 
 float DegToRad(float angle) {
@@ -234,7 +242,6 @@ float cosDeg(float angle) {
     return cos(DegToRad(angle)); // Convertit en radians et applique cos()
 }
 
-
 void readAngle() {
   //Lecture angle des moteurs
   qA = dxl.getPresentPosition(DXL_ID1, UNIT_DEGREE);
@@ -252,6 +259,44 @@ void readAngle() {
   Serial.println(qC);*/
 }
 
+void readIMU() 
+{
+  Wire.beginTransmission(MPU);
+  Wire.write(0x3B);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU, 14, true);
+  AcXcal = -950;
+  AcYcal = -300;
+  AcZcal = 0;
+  tcal = -1600;
+  GyXcal = 480;
+  GyYcal = 170;
+  GyZcal = 210;
+  AcX = Wire.read() << 8 | Wire.read();
+  AcY = Wire.read() << 8 | Wire.read();
+  AcZ = Wire.read() << 8 | Wire.read();
+  Tmp = Wire.read() << 8 | Wire.read();
+
+  GyX = Wire.read() << 8 | Wire.read();
+  GyY = Wire.read() << 8 | Wire.read();
+  GyZ = Wire.read() << 8 | Wire.read();
+  tx = Tmp + tcal;
+  t = tx / 340 + 36.53;
+  tf = (t * 9 / 5) + 32;
+   /*Serial.println("AcX: ");
+  Serial.println(AcX);
+  Serial.println("AcY: ");
+  Serial.println(AcY);
+  Serial.println("AcZ: ");
+  Serial.println(AcZ);*/
+
+  Serial.println("GyX: ");
+  Serial.println(GyX);
+  Serial.println("GyY: ");
+  Serial.println(GyY);
+  Serial.println("GyZ: ");
+  Serial.println(GyZ);
+}
 
 void setup() {
 
@@ -306,9 +351,9 @@ Wire.begin();
   dxl.torqueOn(DXL_ID3);
 
   // Limit the maximum velocity in Position Control Mode. Use 0 for Max speed
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1,50);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 50);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 50);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 30);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 30);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 30);
 
   DEBUG_SERIAL.println("Super Setup done.");
   DEBUG_SERIAL.print("Last error code: ");
@@ -325,47 +370,12 @@ Wire.begin();
 
 void loop() {
 
-Wire.beginTransmission(MPU);
- Wire.write(0x3B);
- Wire.endTransmission(false);
- Wire.requestFrom(MPU, 14, true);
- AcXcal = -950;
- AcYcal = -300;
- AcZcal = 0;
- tcal = -1600;
- GyXcal = 480;
- GyYcal = 170;
- GyZcal = 210;
- AcX = Wire.read() << 8 | Wire.read();
- AcY = Wire.read() << 8 | Wire.read();
- AcZ = Wire.read() << 8 | Wire.read();
- Tmp = Wire.read() << 8 | Wire.read();
+  readIMU();
 
- GyX = Wire.read() << 8 | Wire.read();
- GyY = Wire.read() << 8 | Wire.read();
- GyZ = Wire.read() << 8 | Wire.read();
- tx = Tmp + tcal;
- t = tx / 340 + 36.53;
- tf = (t * 9 / 5) + 32;
-
- getAngle(AcX, AcY, AcZ, GyZ);
+  getAngle(AcX, AcY, AcZ, GyY);
 
   readAngle();
- /* Quaternion initialOrientation = Quaternion::fromEuler(qB , qA  , qA );
-  Quaternion currentOrientation = Quaternion::fromEuler(pitch, roll, yaw);
-  Quaternion correction = initialOrientation * currentOrientation.inverse();
-  correction.normalize();
-  correction.toAxisAngle(angle, ax, ay, az);
-
-  modMoteur1 = RadToDeg(az*angle);
-  modMoteur2 = RadToDeg(ax*angle);
-  modMoteur3 = RadToDeg(ay*angle);
-  Serial.print("modMoteur1: ");
-  Serial.println(modMoteur1);
-  Serial.print("modMoteur2: ");
-  Serial.println(modMoteur2);
-  Serial.print("modMoteur3: ");
-  Serial.println(modMoteur3);*/
+ 
   updatemotorposition(yaw, pitch, roll, 0, 0, 0);
   Serial.println("motorYaw: ");
   Serial.println(motorYaw);
@@ -374,13 +384,24 @@ Wire.beginTransmission(MPU);
   Serial.println("motorRoll: ");
   Serial.println(motorRoll);
 
-  /*Serial.println( ANGLE_0_DXL_ID1  + qA + motorYaw);
-  Serial.println(ANGLE_0_DXL_ID2 + qB + motorRoll);
-  Serial.println(ANGLE_0_DXL_ID3 + qC + motorPitch);*/
+  if (fabs((ANGLE_0_DXL_ID1  + motorYaw) -  lastAngle1) >= seuil )  
+  {
+    dxl.setGoalPosition(DXL_ID1, ANGLE_0_DXL_ID1  + motorYaw, UNIT_DEGREE);
+    lastAngle1 = ANGLE_0_DXL_ID1  + motorYaw;
+  }
+  
+  if (fabs((ANGLE_0_DXL_ID2  + motorRoll) -  lastAngle2) >= seuil  )  
+  {
+    dxl.setGoalPosition(DXL_ID2, ANGLE_0_DXL_ID2  + motorRoll, UNIT_DEGREE);
+    lastAngle2 = ANGLE_0_DXL_ID2  + motorRoll;
+  }
 
-
- dxl.setGoalPosition(DXL_ID1, ANGLE_0_DXL_ID1  + motorYaw, UNIT_DEGREE);
-  dxl.setGoalPosition(DXL_ID2, ANGLE_0_DXL_ID2  + motorRoll, UNIT_DEGREE);
-  dxl.setGoalPosition(DXL_ID3, ANGLE_0_DXL_ID3 + motorPitch, UNIT_DEGREE);
-  //delay(2000);
+  if (fabs((ANGLE_0_DXL_ID3 + motorPitch) -  lastAngle3) >= seuil )  
+  {
+    dxl.setGoalPosition(DXL_ID3, ANGLE_0_DXL_ID3 + motorPitch, UNIT_DEGREE);
+    lastAngle3 = ANGLE_0_DXL_ID3 + motorPitch;
+  }
+   
+  delay(50);
+  
 }
