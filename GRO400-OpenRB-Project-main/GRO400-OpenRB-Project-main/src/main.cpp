@@ -298,9 +298,68 @@ void readIMU()
   Serial.println(GyZ);
 }
 
+void sendNewPositionToMotors()
+{
+  float Motor1GoToPosition = ANGLE_0_DXL_ID1  + motorYaw;
+  float Motor2GoToPosition = ANGLE_0_DXL_ID2  + motorRoll;
+  float Motor3GoToPosition = ANGLE_0_DXL_ID3 + motorPitch;
+
+  //Verification que les angles restent entre 0 et 360 car les moteurs couvrent seulement entre ces 2 bornes
+  if (Motor1GoToPosition > 360)
+  {
+    Motor1GoToPosition = 360;
+  }
+
+  if (Motor1GoToPosition < 0)
+  {
+    Motor1GoToPosition = 0;
+  }
+
+  if (Motor2GoToPosition > 360)
+  {
+    Motor2GoToPosition = 360;
+  }
+
+  if (Motor2GoToPosition < 0)
+  {
+    Motor2GoToPosition = 0;
+  }
+
+  if (Motor3GoToPosition > 360)
+  {
+    Motor3GoToPosition = 360;
+  }
+
+  if (Motor3GoToPosition < 0)
+  {
+    Motor3GoToPosition = 0;
+  }
+
+  if (fabs((Motor1GoToPosition) -  lastAngle1) >= seuil )  
+  {
+    dxl.setGoalPosition(DXL_ID1, Motor1GoToPosition, UNIT_DEGREE);
+    lastAngle1 = Motor1GoToPosition;
+  }
+  
+  if (fabs((Motor2GoToPosition) -  lastAngle2) >= seuil  )  
+  {
+    dxl.setGoalPosition(DXL_ID2, Motor2GoToPosition, UNIT_DEGREE);
+    lastAngle2 = Motor2GoToPosition;
+  }
+
+  if (fabs((Motor3GoToPosition) -  lastAngle3) >= seuil )  
+  {
+    dxl.setGoalPosition(DXL_ID3, Motor3GoToPosition, UNIT_DEGREE);
+    lastAngle3 = Motor3GoToPosition;
+  }
+   
+  delay(50);
+
+}
+
 void setup() {
 
-Wire.begin();
+ Wire.begin();
  Wire.beginTransmission(MPU);
  Wire.write(0x6B);
  Wire.write(0);
@@ -377,6 +436,7 @@ void loop() {
   readAngle();
  
   updatemotorposition(yaw, pitch, roll, 0, 0, 0);
+  
   Serial.println("motorYaw: ");
   Serial.println(motorYaw);
   Serial.println("motorPitch: ");
@@ -384,24 +444,6 @@ void loop() {
   Serial.println("motorRoll: ");
   Serial.println(motorRoll);
 
-  if (fabs((ANGLE_0_DXL_ID1  + motorYaw) -  lastAngle1) >= seuil )  
-  {
-    dxl.setGoalPosition(DXL_ID1, ANGLE_0_DXL_ID1  + motorYaw, UNIT_DEGREE);
-    lastAngle1 = ANGLE_0_DXL_ID1  + motorYaw;
-  }
-  
-  if (fabs((ANGLE_0_DXL_ID2  + motorRoll) -  lastAngle2) >= seuil  )  
-  {
-    dxl.setGoalPosition(DXL_ID2, ANGLE_0_DXL_ID2  + motorRoll, UNIT_DEGREE);
-    lastAngle2 = ANGLE_0_DXL_ID2  + motorRoll;
-  }
-
-  if (fabs((ANGLE_0_DXL_ID3 + motorPitch) -  lastAngle3) >= seuil )  
-  {
-    dxl.setGoalPosition(DXL_ID3, ANGLE_0_DXL_ID3 + motorPitch, UNIT_DEGREE);
-    lastAngle3 = ANGLE_0_DXL_ID3 + motorPitch;
-  }
-   
-  delay(50);
+  sendNewPositionToMotors();
   
 }
