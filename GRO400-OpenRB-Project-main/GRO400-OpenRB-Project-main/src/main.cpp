@@ -94,7 +94,7 @@ float lastAngle1 = 0;
 float lastAngle2 = 0;
 float lastAngle3 = 0;
 
-int seuil = 8; //degree
+int seuil = 1; //degree
 
  // Définition d'une structure pour les quaternions
 struct Quaternion {
@@ -202,25 +202,37 @@ void getAngle(int Ax, int Ay, int Az, int Gy) {
  double x = Ax;
  double y = Ay;
  double z = Az;
- 
- pitch = atan(z / sqrt((y * y))) ;
 
- roll = atan(x / sqrt((y * y)));
+ float yaw_rad =0;
+
+ pitch = -(atan2(z, sqrt(y * y)));
+
+ roll = atan2(x , sqrt((y * y)));
 
  //yaw = atan(x / sqrt((z * z)+(y * y)));
 
  double currentTime = millis() / 1000.0; // Temps en secondes
  double deltaTime = currentTime - previousTime;
  previousTime = currentTime;
- Serial.println("deltaTime: ");
-Serial.println(deltaTime);
+ //Serial.println("deltaTime: ");
+//Serial.println(deltaTime);
 //Intégrer la vitesse angulaire pour obtenir l'angle yaw
-  float yaw_rad =+ (-Gy/600) * deltaTime;
+if (Gy > 100 || Gy < -100) 
+{
+  yaw_rad += (-Gy/600) * deltaTime;
+}
 
  pitch = pitch * (180.0 / PI) + initialPitch;
  roll = roll * (180.0 / PI) + initialRoll;
  yaw = yaw_rad * (180.0 / PI) + initialYaw;
- 
+
+  // Convertir en position moteur (0 à 360°)
+  pitch = int(fmod((pitch * (180.0 / PI) + initialPitch ), 360));
+  roll = int(fmod((roll * (180.0 / PI) + initialRoll ), 360));
+  yaw = int(fmod((yaw_rad * (180.0 / PI) + initialYaw ), 360));
+
+ Serial.println("yaw: ");
+ Serial.println(yaw);
 
 }
 
@@ -290,12 +302,12 @@ void readIMU()
   Serial.println("AcZ: ");
   Serial.println(AcZ);*/
 
-  Serial.println("GyX: ");
-  Serial.println(GyX);
+  /*Serial.println("GyX: ");
+  Serial.println(GyX);*/
   Serial.println("GyY: ");
   Serial.println(GyY);
-  Serial.println("GyZ: ");
-  Serial.println(GyZ);
+  /*Serial.println("GyZ: ");
+  Serial.println(GyZ);*/
 }
 
 void sendNewPositionToMotors()
@@ -353,7 +365,7 @@ void sendNewPositionToMotors()
     lastAngle3 = Motor3GoToPosition;
   }
    
-  delay(50);
+  //delay(10);
 
 }
 
@@ -434,15 +446,17 @@ void loop() {
   getAngle(AcX, AcY, AcZ, GyY);
 
   readAngle();
- 
-  updatemotorposition(yaw, pitch, roll, 0, 0, 0);
+  
+  updatemotorposition(yaw, pitch, roll, 0,  0, 0);
   
   Serial.println("motorYaw: ");
   Serial.println(motorYaw);
+  /*
   Serial.println("motorPitch: ");
   Serial.println(motorPitch);
   Serial.println("motorRoll: ");
   Serial.println(motorRoll);
+  */
 
   sendNewPositionToMotors();
   
