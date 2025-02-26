@@ -1,3 +1,4 @@
+
 // GRO400 - Exemple d'utilisation du OpenRB avec un moteur Dynamixel sous Platform.IO.
 // Basé sur l'exemple de Position Control.
 // Opère un moteur (à définir par la variable DXL_ID - 1 par défaut) en position en le faisant passer
@@ -94,7 +95,7 @@ float lastAngle1 = 0;
 float lastAngle2 = 0;
 float lastAngle3 = 0;
 
-int seuil = 1; //degree
+int seuil = 5; //degree
 
  // Définition d'une structure pour les quaternions
 struct Quaternion {
@@ -202,37 +203,25 @@ void getAngle(int Ax, int Ay, int Az, int Gy) {
  double x = Ax;
  double y = Ay;
  double z = Az;
+ 
+ pitch = -(atan(z / sqrt((y * y)))) ;
 
- float yaw_rad =0;
-
- pitch = -(atan2(z, sqrt(y * y)));
-
- roll = atan2(x , sqrt((y * y)));
+ roll = atan(x / sqrt((y * y)));
 
  //yaw = atan(x / sqrt((z * z)+(y * y)));
 
  double currentTime = millis() / 1000.0; // Temps en secondes
  double deltaTime = currentTime - previousTime;
  previousTime = currentTime;
- //Serial.println("deltaTime: ");
-//Serial.println(deltaTime);
+ Serial.println("deltaTime: ");
+Serial.println(deltaTime);
 //Intégrer la vitesse angulaire pour obtenir l'angle yaw
-if (Gy > 100 || Gy < -100) 
-{
-  yaw_rad += (-Gy/600) * deltaTime;
-}
+  float yaw_rad =+ (-Gy/200) * deltaTime;
 
  pitch = pitch * (180.0 / PI) + initialPitch;
  roll = roll * (180.0 / PI) + initialRoll;
  yaw = yaw_rad * (180.0 / PI) + initialYaw;
-
-  // Convertir en position moteur (0 à 360°)
-  pitch = int(fmod((pitch * (180.0 / PI) + initialPitch ), 360));
-  roll = int(fmod((roll * (180.0 / PI) + initialRoll ), 360));
-  yaw = int(fmod((yaw_rad * (180.0 / PI) + initialYaw ), 360));
-
- Serial.println("yaw: ");
- Serial.println(yaw);
+ 
 
 }
 
@@ -302,12 +291,12 @@ void readIMU()
   Serial.println("AcZ: ");
   Serial.println(AcZ);*/
 
-  /*Serial.println("GyX: ");
-  Serial.println(GyX);*/
+  Serial.println("GyX: ");
+  Serial.println(GyX);
   Serial.println("GyY: ");
   Serial.println(GyY);
-  /*Serial.println("GyZ: ");
-  Serial.println(GyZ);*/
+  Serial.println("GyZ: ");
+  Serial.println(GyZ);
 }
 
 void sendNewPositionToMotors()
@@ -365,7 +354,7 @@ void sendNewPositionToMotors()
     lastAngle3 = Motor3GoToPosition;
   }
    
-  //delay(10);
+  //delay(50);
 
 }
 
@@ -422,9 +411,9 @@ void setup() {
   dxl.torqueOn(DXL_ID3);
 
   // Limit the maximum velocity in Position Control Mode. Use 0 for Max speed
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 30);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 30);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 30);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 40);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 40);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 40);
 
   DEBUG_SERIAL.println("Super Setup done.");
   DEBUG_SERIAL.print("Last error code: ");
@@ -446,17 +435,15 @@ void loop() {
   getAngle(AcX, AcY, AcZ, GyY);
 
   readAngle();
+ 
+  updatemotorposition(yaw, pitch, roll, 0, 0, 0);
   
-  updatemotorposition(yaw, pitch, roll, 0,  0, 0);
-  
-  Serial.println("motorYaw: ");
+  /*Serial.println("motorYaw: ");
   Serial.println(motorYaw);
-  /*
   Serial.println("motorPitch: ");
   Serial.println(motorPitch);
   Serial.println("motorRoll: ");
-  Serial.println(motorRoll);
-  */
+  Serial.println(motorRoll);*/
 
   sendNewPositionToMotors();
   
