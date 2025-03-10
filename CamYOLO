@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import time
 from picamera2 import Picamera2
 
 # Charger le fichier des classes (coco.names) contenant les classes d'objets que YOLO peut détecter
@@ -16,16 +17,25 @@ output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
 # Initialiser la caméra Pi
 picam2 = Picamera2()
 #picam2.configure(picam2.create_preview_configuration(main={"size": (640, 480)}))
-picam2.configure(picam2.create_preview_configuration(raw={"size": (1640, 1232)},main={"format": 'RGB888', "size": (1640, 1232)}))
+picam2.configure(picam2.create_preview_configuration(raw={"size": (640,480)},main={"format": 'RGB888', "size": (640, 480)})) #1640, 1232
 picam2.start()
 
+
+frame_count = 0  # Compteur pour les images
+start_time = time.time()  # Temps de départ
+fps_values = []  # Liste pour stocker les FPS de chaque image
 while True:
     # Capture d'une image depuis la caméra Pi
     frame = picam2.capture_array()
     
+    # Mesurer le temps à chaque frame
+    frame_count += 1
+    frame_start_time = time.time()
+    
+    
     # Prétraitement de l'image pour YOLO
     height, width, channels = frame.shape
-    blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
+    blob = cv2.dnn.blobFromImage(frame, 0.00392, (160, 160), (0, 0, 0), True, crop=False) #416 de resolution pls ou 360 par 360 cest good
     net.setInput(blob)
     
     # Faire une prédiction sur l'image
@@ -41,7 +51,7 @@ while True:
             class_id = np.argmax(scores)
             confidence = scores[class_id]
             
-            if confidence > 0.5:
+            if confidence > 0.3: #seuil de confiance pour l<affichage 50%
                 center_x = int(detection[0] * width)
                 center_y = int(detection[1] * height)
                 w = int(detection[2] * width)
@@ -65,13 +75,27 @@ while True:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
             cv2.putText(frame, f"{label} {confidence}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
+    # Calculer le FPS actuel
+    frame_end_time = time.time()
+    fps = 1 / (frame_end_time - frame_start_time)
+    fps_values.append(fps)
+
     # Afficher l'image avec les objets détectés
     cv2.imshow("YOLO Object Detection", frame)
 
+    # Capturer la touche en temps réel
+    key = cv2.waitKey(1) & 0xFF
+    
     # Quitter avec 'q'
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    if key == ord('q'):
         break
+        
+    # Afficher les FPS moyens avec 'f'
+    elif key == ord('f'):
+        avg_fps = np.mean(fps_values)
+        print(f"Nombre moyen de FPS: {avg_fps:.2f}")
 
 # Fermer la caméra et la fenêtre OpenCV
 cv2.destroyAllWindows()
 picam2.close()
+
