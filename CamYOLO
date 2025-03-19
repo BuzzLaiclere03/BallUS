@@ -1,41 +1,26 @@
-import cv2
+
 import numpy as np
-import time
 import serial
+import cv2
 from picamera2 import Picamera2
-
-width = 1640 #640 et 480
-height = 1640
-
-detectedObject = 39; # Classe 0 = Personne #39=bouteille 67 pour cell
-
-# Configuration de la connexion série avec l'Arduino
-arduino = serial.Serial('/dev/ttyACM0', 9600)  # Remplace '/dev/ttyUSB0' par le port de ton Arduino
-time.sleep(2)  # Temps d'attente pour que la connexion série soit établie
+from ultralytics import YOLO
+import time
 
 
-# Charger les classes COCO
-with open("coco.names", "r") as f:
-    classes = [line.strip() for line in f.readlines()]
-
-# Charger YOLOv4
-net = cv2.dnn.readNet("yolov4.weights", "yolov4.cfg")
-layer_names = net.getLayerNames()
-output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
-
-# Initialiser la caméra
-picam2 = Picamera2()
-picam2.configure(picam2.create_preview_configuration(raw={"size": (width, height)}, 
-                                                     main={"format": 'RGB888', "size": (width, height)}))
-picam2.start()
-
-frame_count = 0
-start_time = time.time()
-fps_values = []
 
 # Champs de vision (Field of View) de la PiCamera3
 FOV_x = 66  # FOV horizontal en degrés
 FOV_y = 41  # FOV vertical en degrés
+
+width = 1640 #640 et 480 1280
+height = 1640
+
+
+detectedObject = 0;
+
+# Configuration de la connexion série avec l'Arduino
+arduino = serial.Serial('/dev/ttyACM0', 9600)  # Remplace '/dev/ttyUSB0' par le port de ton Arduino
+time.sleep(2)  # Temps d'attente pour que la connexion série soit établie
 
 def send_angles_to_arduino(yaw, pitch):
     # Envoie les valeurs de yaw et pitch au format flottant via le port série
@@ -56,93 +41,85 @@ def get_rotation_angles(x_center, y_center):
 
     return theta_yaw, theta_pitch
 
+# Set up the camera with Picam
+picam2 = Picamera2()
+picam2.preview_configuration.main.size = (width, height)
+picam2.preview_configuration.main.format = "RGB888"
+picam2.preview_configuration.align()
+picam2.configure("preview")
+picam2.start()
+
+# Load YOLOv8
+model = YOLO("yolov8n_ncnn_model") #yolov8n.pt
+
+# Variables pour mesurer la vitesse de traitement
+prev_time = time.time()
+
+
 while True:
-    # Capture d'une image
+    
+    frame_start_time = time.time()  # Début du traitement de la frame
+    
+    # Capture a frame from the camera
     frame = picam2.capture_array()
     
     # Inversion verticale de l'image
     flipped_frame = cv2.flip(frame, 0)
     
+    # Run YOLO model on the captured frame and store the results
+    results = model.predict(flipped_frame, imgsz = 320)
+    detections = results[0]
     
-    # Mesurer le temps de traitement de chaque frame
-    frame_count += 1
-    frame_start_time = time.time()
+    x_center = []
+    y_center = []
 
-    # Prétraitement de l'image pour YOLO
-    height, width, channels = flipped_frame.shape
-    blob = cv2.dnn.blobFromImage(flipped_frame, 0.00392, (160, 160), (0, 0, 0), True, crop=False)
-    net.setInput(blob)
-    
-    # Exécuter YOLO
-    detections = net.forward(output_layers)
+    for det in detections.boxes:
+        x, y, w, h = det.xywh[0]  # Coordonnées du centre et dimensions
+        conf = det.conf[0].item()  # Confiance
+        cls = int(det.cls[0].item())  # Classe détectée
 
-    class_ids = []
-    confidences = []
-    boxes = []
-
-    for out in detections:
-        for detection in out:
-            scores = detection[5:]
-            class_id = np.argmax(scores)
-            confidence = scores[class_id]
-            
-            if confidence > 0.3 and class_id == detectedObject:  # Classe 0 = Personne #39=bouteille
-                center_x = int(detection[0] * width)
-                center_y = int(detection[1] * height)
-                w = int(detection[2] * width)
-                h = int(detection[3] * height)
-
-                x = int(center_x - w / 2)
-                y = int(center_y - h / 2)
-
-                boxes.append([x, y, w, h])
-                confidences.append(float(confidence))
-                class_ids.append(class_id)
-
-    # Suppression des doublons avec NMS
-    indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
-
-    if len(indexes) > 0:
-        for i in indexes.flatten():
-            x, y, w, h = boxes[i]
-            label = str(classes[class_ids[i]])
-            confidence = str(round(confidences[i], 2))
-
-            # Dessiner le rectangle de détection
-            cv2.rectangle(flipped_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            cv2.putText(flipped_frame, f"{label} {confidence}", (x, y - 10), 
+        if conf > 0.5 and cls == detectedObject:
+            x, y, w, h = map(int, [x, y, w, h])
+            cv2.rectangle(flipped_frame, (x - w // 2, y - h // 2), 
+                            (x + w // 2, y + h // 2), (0, 255, 0), 2)
+            cv2.putText(flipped_frame, f"{cls} {conf:.2f}", (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-
-            # Calcul des angles de rotation pour suivre la personne détectée
-            x_center = x + w // 2
-            y_center = y + h // 2
-            yaw, pitch = get_rotation_angles(x_center, y_center)
-
-            # Envoi des angles à l'Arduino
-            send_angles_to_arduino(yaw, pitch)
             
-            print(f"Correction : Yaw = {yaw:.2f}°, Pitch = {pitch:.2f}°")
+            x_center.append(x)
+            y_center.append(y)
+            
+            cv2.circle(flipped_frame, (x, y), 5, (0, 0, 255), -1)
+    
+        if x_center:
+            x_center_moy = int(np.mean(x_center))
+            y_center_moy = int(np.mean(y_center))
 
-            # Dessiner le centre de la cible détectée
-            cv2.circle(flipped_frame, (x_center, y_center), 5, (0, 0, 255), -1)
 
-    # Calcul des FPS actuels
+            yaw, pitch = get_rotation_angles(x_center_moy, y_center_moy)
+            send_angles_to_arduino(yaw, pitch)
+
+            cv2.circle(flipped_frame, (x_center_moy, y_center_moy), 5, (0, 0, 255), -1)
+    
+    # Output the visual detection data, we will draw this on our camera preview window
+    #annotated_frame = detections[0].plot()
+    
+    # Calculer la vitesse de la frame
     frame_end_time = time.time()
-    fps = 1 / (frame_end_time - frame_start_time)
-    fps_values.append(fps)
+    frame_time = frame_end_time - frame_start_time
+    fps = 1 / frame_time if frame_time > 0 else 0
 
-    # Afficher l'image en temps réel
+    # Afficher les FPS sur l'image
+    cv2.putText(flipped_frame, f"FPS: {fps:.1f}", (10, 30), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+
+
+    # Display the resulting frame
     cv2.imshow("YOLO Object Tracking", flipped_frame)
 
-    # Gestion des touches clavier
-    key = cv2.waitKey(1) & 0xFF
-    
-    if key == ord('q'):
-        break  # Quitter le programme
-    elif key == ord('f'):
-        avg_fps = np.mean(fps_values)
-        print(f"FPS moyen: {avg_fps:.2f}")
+    # Exit the program if q is pressed
+    if cv2.waitKey(1) == ord("q"):
+        break
 
-# Fermer OpenCV et la caméra
+# Close all windows
 cv2.destroyAllWindows()
-picam2.close()
+
