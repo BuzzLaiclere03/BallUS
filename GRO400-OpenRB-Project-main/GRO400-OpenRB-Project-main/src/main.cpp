@@ -165,7 +165,7 @@ struct Quaternion1 {
 
     void normalize() {
         float norm = sqrt(w * w + x * x + y * y + z * z);
-        if (norm > 0.0f) { // Éviter la division par zéro
+        if (norm > 1e-6) { // Éviter la division par zéro
             w /= norm;
             x /= norm;
             y /= norm;
@@ -176,12 +176,12 @@ struct Quaternion1 {
 //--------------------------------------------------------------- fonction  eulerToQuaternion 
 // Fonction pour convertir des angles d'Euler en quaternion
 Quaternion1 eulerToQuaternion(float yaw, float pitch, float roll) {
-    float cy = cos(yaw * PI / 360);
-    float sy = sin(yaw * PI / 360);
-    float cp = cos(pitch * PI / 360);
-    float sp = sin(pitch * PI / 360);
-    float cr = cos(roll * PI / 360);
-    float sr = sin(roll * PI / 360);
+    float cy = cos(yaw * PI / 180 /2);
+    float sy = sin(yaw * PI / 180 /2);
+    float cp = cos(pitch * PI / 180 /2);
+    float sp = sin(pitch * PI / 180 /2);
+    float cr = cos(roll * PI / 180 /2);
+    float sr = sin(roll * PI / 180 /2);
 
     return {
         cy * cp * cr + sy * sp * sr, // w
@@ -206,7 +206,7 @@ void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC,
     Quaternion1 gimbalReference = eulerToQuaternion(qA, qC, qB);
     
     // Calculer la compensation : q_corr = q_g^-1 * q_ref
-    Quaternion1 q_corr = gimbalReference * q_g.inverse();
+    Quaternion1 q_corr = q_g.inverse() * gimbalReference;
 
     // normalise
     q_corr.normalize();
@@ -226,6 +226,7 @@ void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC,
     Serial.println(pitchComp);
     Serial.println("rollComp: ");
     Serial.println(rollComp);
+
 
     // Convertir en position moteur (0 à 360°)
     motorYaw = int(fmod((yawComp + qA ), 360));
@@ -684,8 +685,8 @@ void getAngles() {
   accelgyro.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
  
   // Calculate Pitch and Roll based on accelerometer data
-  pitch = atan2(-az, ay) * (180.0 / PI);  // Pitch
-  roll = atan2(-ax, ay) * (180.0 / PI);   // Roll
+  pitch = atan2(-az, sqrt(ay*ay + ax*ax)) * (180.0 / PI);  // Pitch
+  roll = atan2(ax, sqrt(ay*ay + az*az)) * (180.0 / PI);   // Roll
  
   // Apply the gyroscope data (integration over time)
   long currentGyroTime = millis();
@@ -784,12 +785,81 @@ void loop() {
 }
 */
 
+void testEulerToQuaternion() {
+  float yaw = 0, pitch = 10, roll = 10;
+  Quaternion1 q = eulerToQuaternion(yaw, pitch, roll);
+
+  Serial.println("Quaternion from Euler (10,10,0): ");
+  Serial.print("w: "); Serial.println(q.w,6);
+  Serial.print("x: "); Serial.println(q.x,6);
+  Serial.print("y: "); Serial.println(q.y,6);
+  Serial.print("z: "); Serial.println(q.z,6);
+}
+
+void testQuaternionInverse() {
+  Quaternion1 q = eulerToQuaternion(0, 10, 10);
+  Quaternion1 q_inv = q.inverse();
+
+  Serial.println("Inverse Quaternion: ");
+  Serial.print("w: "); Serial.println(q_inv.w,6);
+  Serial.print("x: "); Serial.println(q_inv.x,6);
+  Serial.print("y: "); Serial.println(q_inv.y,6);
+  Serial.print("z: "); Serial.println(q_inv.z,6);
+}
+void testToEuler() {
+  Quaternion1 q = eulerToQuaternion(0, 10, 10);
+  float yaw, pitch, roll;
+  q.toEuler(yaw, pitch, roll);
+
+  Serial.println("Euler Angles from Quaternion: ");
+  Serial.print("Yaw: "); Serial.println(yaw);
+  Serial.print("Pitch: "); Serial.println(pitch);
+  Serial.print("Roll: "); Serial.println(roll);
+}
+
+void testcalcule() {
+  Quaternion1 q = eulerToQuaternion(0, 10, 10);
+  Quaternion1 q_i = eulerToQuaternion(0, -10, -10);
+  Quaternion1 gimbalReference = eulerToQuaternion(0, 0, 0);
+  Quaternion1 q_corr = q.inverse() * gimbalReference;
+
+  Serial.println("Inverse Quaternion 1: ");
+  Serial.print("w: "); Serial.println(q_i.w,6);
+  Serial.print("x: "); Serial.println(q_i.x,6);
+  Serial.print("y: "); Serial.println(q_i.y,6);
+  Serial.print("z: "); Serial.println(q_i.z,6);
+
+  Serial.println("Inverse Quaternion 2: ");
+  Serial.print("w: "); Serial.println(q_corr.w,6);
+  Serial.print("x: "); Serial.println(q_corr.x,6);
+  Serial.print("y: "); Serial.println(q_corr.y,6);
+  Serial.print("z: "); Serial.println(q_corr.z,6);
+
+
+}
+
 void loop() {
-  getAngles();
+  //getAngles();
+  //delay(500);
   
+  angle_yaw=0;
+  angle_pitch=10;
+  angle_roll=10;
+
   updatemotorposition(angle_yaw, angle_pitch, angle_roll, 0,  0, 0);
+  testEulerToQuaternion();
+  testQuaternionInverse();
+  testToEuler();
+
+ Serial.println("motorYaw: ");
+  Serial.println(motorYaw);
+  Serial.println("motorPitch: ");
+  Serial.println(motorPitch);
+  Serial.println("motorRoll: ");
+  Serial.println(motorRoll);
+
   
-  sendNewPositionToMotors();
+  //sendNewPositionToMotors();
 
 }
 
