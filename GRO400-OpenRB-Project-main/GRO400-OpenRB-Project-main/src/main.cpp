@@ -10,8 +10,12 @@
 #include <math.h>
 #include <Wire.h>
 #include <cmath>
-#include "I2Cdev.h"
-#include "MPU6050.h"
+//#include "I2Cdev.h"
+//#include "MPU6050.h"
+
+#include <MPU6050_light.h>
+//#include "MPU9250.h" 
+
 
 // Please modify it to suit your hardware.
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560) // When using DynamixelShield
@@ -98,12 +102,21 @@ float lastAngle3 = 0;
 
 int seuil = 1; //degree
 
+// initiation pour IMU
+MPU6050 mpu(Wire);
+unsigned long timer = 0;
+
+// initiation de la mémoire des angle 
+float last_Yaw=0;
+float last_pitch=0;
+float last_Roll=0;
+
 //-------------------------------------------------------------------- Initiation pour le calcule de yaw pitch roll -------------------------------------------------------------------------------------
 
 // I2Cdev and MPU6050 must be installed as libraries, or else the .cpp/.h files
 // for both classes must be in the include path of your project
  
-MPU6050 accelgyro;
+//MPU6050 accelgyro;
  
 int16_t ax, ay, az;
 int16_t gx, gy, gz;
@@ -206,7 +219,7 @@ void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC,
     Quaternion1 gimbalReference = eulerToQuaternion(qA, qC, qB);
     
     // Calculer la compensation : q_corr = q_g^-1 * q_ref
-    Quaternion1 q_corr = q_g.inverse() * gimbalReference;
+    Quaternion1 q_corr =  gimbalReference * q_g.inverse();
 
     // normalise
     q_corr.normalize();
@@ -232,11 +245,6 @@ void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC,
     motorYaw = int(fmod((yawComp + qA ), 360));
     motorPitch = int(fmod((pitchComp + qC ), 360));
     motorRoll = int(fmod((rollComp + qB ), 360));
-    //motorYaw = qA + motorYaw;
-    //motorPitch = qC + motorPitch;
-    //motorRoll = qC + motorRoll;
-
-    //delay(10);  // Petit délai
 
 }
 
@@ -611,8 +619,24 @@ void setup() {
 void setup() {
   Wire.begin();
   Serial.begin(9600);
+  
+  
+  byte status = mpu.begin();
+  Serial.print(F("MPU6050 status: "));
+  Serial.println(status);
  
-  accelgyro.initialize();
+  while (status != 0) {
+    // stop everything if could not connect to MPU6050
+    delay(100);
+  }
+ 
+  Serial.println(F("Calculating offsets, do not move MPU6050"));
+  delay(1000);
+  mpu.calcOffsets(); // Gyro and accelerometer calibration
+  Serial.println("Done!\n");
+ 
+ 
+  //accelgyro.initialize();
 
  Wire.beginTransmission(MPU);
  Wire.write(0x6B);
@@ -680,13 +704,26 @@ void setup() {
   
 }
 
+
+ 
+
+
+
 // --------------------------------------------------------------------- get Angles ------------------------------------------------------------------
+/*
 void getAngles() {
   accelgyro.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
  
   // Calculate Pitch and Roll based on accelerometer data
-  pitch = atan2(-az, sqrt(ay*ay + ax*ax)) * (180.0 / PI);  // Pitch
-  roll = atan2(ax, sqrt(ay*ay + az*az)) * (180.0 / PI);   // Roll
+  
+  //pitch = atan2(-az, sqrt(ay*ay + ax*ax)) * (180.0 / PI);  // Pitch
+  //roll = atan2(ax, sqrt(ay*ay + az*az)) * (180.0 / PI);   // Roll
+  
+  //pitch = atan2(az, ay) * (180.0 / PI);  // Pitch
+  //roll = atan2(ax, ay) * (180.0 / PI);   // Roll
+
+  pitch = atan2(ax, ay) * (180.0 / PI);  // Pitch
+  roll = atan2(az, ay) * (180.0 / PI);   // Roll
  
   // Apply the gyroscope data (integration over time)
   long currentGyroTime = millis();
@@ -694,8 +731,8 @@ void getAngles() {
   lastGyroTime = currentGyroTime;
  
   // Gyro values in degrees per second
-  gyroX_rate = -gx / 131.0;
-  gyroY_rate = -gz / 131.0;
+  gyroX_rate = gz / 131.0;
+  gyroY_rate = gx / 131.0;
   gyroZ_rate = gy / 131.0;
  
   // Update angles using gyroscope data
@@ -704,8 +741,66 @@ void getAngles() {
   yawGyro += gyroZ_rate * dt;
  
   // Yaw angle from magnetometer (assuming calibrated magnetometer)
-  float magX = -mx * cos(roll)  - mz * sin(pitch) * sin(roll) - my * cos(pitch) * sin(roll);
-  float magY = -mz * cos(pitch) + my * sin(pitch);
+  //float magX = mx * cos(roll)  + mz * sin(pitch) * sin(roll) - my * cos(pitch) * sin(roll);
+  //float magY = mz * cos(pitch) + my * sin(pitch);
+  float magX = mz * cos(roll) + mx * sin(pitch) * sin(roll) - my * cos(pitch) * sin(roll);
+  float magY = mx * cos(pitch) + my * sin(pitch);
+  yaw = atan2(magY, magX) * (180.0 / PI);
+   
+
+  // Use complementary filter for yaw (fusing magnetometer and gyro)
+  float alpha = 0.98;  // Complementary filter constant
+  yaw = alpha * (yawGyro) + (1 - alpha) * yaw;  // Filtered yaw
+ 
+  // Kalman filter for pitch and roll
+  updateKalmanFilter(&angle_pitch, &biasX, P_pitch, pitch, gyroX_rate, dt);
+  updateKalmanFilter(&angle_roll, &biasY, P_roll, roll, gyroY_rate, dt);
+  updateKalmanFilter(&angle_yaw, &biasZ, P_yaw, yaw, gyroZ_rate, dt);
+  
+  // Print out the angles
+  Serial.print("Pitch: ");
+  Serial.print(angle_pitch);
+  Serial.print("\tRoll: ");
+  Serial.print(angle_roll);
+  Serial.print("\tYaw: ");
+  Serial.println(angle_yaw);
+  
+}
+*/
+
+/*
+void getAngles() {
+  accelgyro.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
+ 
+  // Calculate Pitch and Roll based on accelerometer data
+  pitch = atan2(ay, az) * (180.0 / PI);  // Pitch
+  roll = atan2(ax, az) * (180.0 / PI);   // Roll
+ 
+  Serial.print("ax: ");
+  Serial.print(ax);
+  Serial.print("\tay: ");
+  Serial.print(ay);
+  Serial.print("\taz: ");
+  Serial.println(az);
+
+  // Apply the gyroscope data (integration over time)
+  long currentGyroTime = millis();
+  float dt = (currentGyroTime - lastGyroTime) / 1000.0;
+  lastGyroTime = currentGyroTime;
+ 
+  // Gyro values in degrees per second
+  gyroX_rate = gx / 131.0;
+  gyroY_rate = gy / 131.0;
+  gyroZ_rate = gz / 131.0;
+ 
+  // Update angles using gyroscope data
+  pitchGyro += gyroX_rate * dt;
+  rollGyro += gyroY_rate * dt;
+  yawGyro += gyroZ_rate * dt;
+ 
+  // Yaw angle from magnetometer (assuming calibrated magnetometer)
+  float magX = mx * cos(roll) + my * sin(pitch) * sin(roll) - mz * cos(pitch) * sin(roll);
+  float magY = my * cos(pitch) + mz * sin(pitch);
   yaw = atan2(magY, magX) * (180.0 / PI);
  
   // Use complementary filter for yaw (fusing magnetometer and gyro)
@@ -725,7 +820,79 @@ void getAngles() {
   Serial.print("\tYaw: ");
   Serial.println(angle_yaw);
 }
+*/
 
+/*
+void getAngles() {
+  mpu.update();  // Update sensor data
+ 
+  if ((millis() - timer) > 10) {  // Print data every 10ms
+    // Décale le pitch de +90 pour que 0 soit à -90
+    float pitch = mpu.getAngleX() + 90;
+ 
+    // Assure que le pitch reste entre -180 et 180
+    if (pitch > 180) pitch -= 360;  // Si pitch > 180, soustrait 360 pour revenir dans la plage [-180, 180]
+    if (pitch < -180) pitch += 360; // Si pitch < -180, ajoute 360 pour revenir dans la plage [-180, 180]
+ 
+    // Affiche les données du pitch décalé
+    Serial.print("X: ");
+    Serial.print(pitch);  // Pitch décalé
+    Serial.print("  Y: ");
+    Serial.print(mpu.getAngleY());  // Roll (non modifié)
+    Serial.print("  Z: ");
+    Serial.println(mpu.getAngleZ());  // Yaw (non modifié)
+   
+    timer = millis();
+  }
+}
+*/
+
+/*
+void getAngles() {
+  accelgyro.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
+ 
+  // Calculate Pitch and Roll based on accelerometer data
+  pitch = atan2(ay, az) * (180.0 / PI);  // Pitch
+  roll = atan2(ax, az) * (180.0 / PI);   // Roll
+ 
+  // Apply the gyroscope data (integration over time)
+  long currentGyroTime = millis();
+  float dt = (currentGyroTime - lastGyroTime) / 1000.0;
+  lastGyroTime = currentGyroTime;
+ 
+  // Gyro values in degrees per second
+  gyroX_rate = gx / 131.0;
+  gyroY_rate = gy / 131.0;
+  gyroZ_rate = gz / 131.0;
+ 
+  // Update angles using gyroscope data
+  pitchGyro += gyroX_rate * dt;
+  rollGyro += gyroY_rate * dt;
+  yawGyro += gyroZ_rate * dt;
+ 
+  // Yaw angle from magnetometer (assuming calibrated magnetometer)
+  float magX = mx * cos(roll) + my * sin(pitch) * sin(roll) - mz * cos(pitch) * sin(roll);
+  float magY = my * cos(pitch) + mz * sin(pitch);
+  yaw = atan2(magY, magX) * (180.0 / PI);
+ 
+  // Use complementary filter for yaw (fusing magnetometer and gyro)
+  float alpha = 0.98;  // Complementary filter constant
+  yaw = alpha * (yawGyro) + (1 - alpha) * yaw;  // Filtered yaw
+ 
+  // Kalman filter for pitch and roll
+  updateKalmanFilter(&angle_pitch, &biasX, P_pitch, pitch, gyroX_rate, dt);
+  updateKalmanFilter(&angle_roll, &biasY, P_roll, roll, gyroY_rate, dt);
+  updateKalmanFilter(&angle_yaw, &biasZ, P_yaw, yaw, gyroZ_rate, dt);
+ 
+  // Print out the angles
+  Serial.print("Pitch: ");
+  Serial.print(angle_pitch);
+  Serial.print("\tRoll: ");
+  Serial.print(angle_roll);
+  Serial.print("\tYaw: ");
+  Serial.println(angle_yaw);
+}
+  */
 
 // ------------------------------------------------------------------------ loop -----------------------------------------------------------------------
 // loop 1
@@ -784,7 +951,7 @@ void loop() {
   
 }
 */
-
+/*
 void testEulerToQuaternion() {
   float yaw = 0, pitch = 10, roll = 10;
   Quaternion1 q = eulerToQuaternion(yaw, pitch, roll);
@@ -837,31 +1004,227 @@ void testcalcule() {
 
 
 }
+*/
+
+// angle
+float DegToRad(float angle) {
+  angle = ((angle) * M_PI / 180.0);
+  return angle; // Convertit les degrés en radians
+}
+
+float sinDeg(float angle) {
+    return sin(DegToRad(angle)); // Convertit en radians et applique sin()
+}
+float cosDeg(float angle) {
+    return cos(DegToRad(angle)); // Convertit en radians et applique cos()
+}
+
+// matrice
+void afficherMatrice(float matrice33[3][3]){
+  for (int i = 0; i < 3; i++) {  
+      for (int j = 0; j < 3; j++) {  
+          Serial.print(matrice33[i][j]);
+          Serial.print(" ");
+      }
+      Serial.println();  
+  }
+}
+
+
+void multiplierMatrices() {
+//Lecture angle des moteurs
+qA = dxl.getPresentPosition(DXL_ID1, UNIT_DEGREE) - ANGLE_0_DXL_ID1;
+qB = dxl.getPresentPosition(DXL_ID2, UNIT_DEGREE) - ANGLE_0_DXL_ID2;
+qC = dxl.getPresentPosition(DXL_ID3, UNIT_DEGREE)- ANGLE_0_DXL_ID3;
+Serial.println(qA);
+Serial.println(qB);
+Serial.println(qC);
+
+theta_x = angle_pitch;
+theta_y = angle_roll; 
+theta_z = angle_yaw;
+
+
+float MatriceMoteurs[3][3] = {
+  {(cosDeg(qC) * cosDeg(qA) - sinDeg(qC) * sinDeg(qB) * sinDeg(qA)), 
+   (cosDeg(qC) * sinDeg(qA) + sinDeg(qC) * sinDeg(qB) * cosDeg(qA)), 
+   (-sinDeg(qC) * cosDeg(qB))},
+
+  {(-cosDeg(qB) * sinDeg(qA)), 
+   (cosDeg(qB) * cosDeg(qA)), 
+   (sinDeg(qB))},
+
+  {(sinDeg(qC) * cosDeg(qA) + cosDeg(qC) * sinDeg(qB) * sinDeg(qA)), 
+   (sinDeg(qC) * sinDeg(qA) - cosDeg(qC) * sinDeg(qB) * cosDeg(qA)), 
+   (cosDeg(qC) * cosDeg(qB))}
+};
+
+float MatriceAccelero[3][3] = {
+  {(cosDeg(theta_y) * cosDeg(theta_z) - sinDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z)), 
+   (-cosDeg(theta_x) * sinDeg(theta_z)), 
+   (sinDeg(theta_y) * cosDeg(theta_z) + cosDeg(theta_y) * sinDeg(theta_x) * sinDeg(theta_z))},
+
+  {(cosDeg(theta_y) * sinDeg(theta_z) + sinDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z)), 
+   (cosDeg(theta_x) * cosDeg(theta_z)), 
+   (sinDeg(theta_y) * sinDeg(theta_z) - cosDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z))},
+
+  {(-sinDeg(theta_y) * cosDeg(theta_x)), 
+   (sinDeg(theta_x)), 
+   (cosDeg(theta_y) * cosDeg(theta_x))}
+};
+
+float MatriceGimbal[3][3] = {
+  {0.0, 0.0, 0.0}, 
+  {0.0, 0.0, 0.0}, 
+  {0.0, 0.0, 0.0}
+};
+
+
+  for (int i = 0; i < 3; i++) {
+      for (int j = 0; j < 3; j++) {
+          MatriceGimbal[i][j] = 0;
+          for (int k = 0; k < 3; k++) {
+              MatriceGimbal[i][j] += MatriceMoteurs[i][k] * MatriceAccelero[k][j];
+          }
+      }
+  }
+afficherMatrice(MatriceMoteurs);
+
+
+  modMoteur3 = atan2(-MatriceGimbal[2][0], sqrt(pow(MatriceGimbal[0][0], 2) + pow(MatriceGimbal[1][0], 2)));
+  modMoteur2 = atan2(MatriceGimbal[2][1], MatriceGimbal[2][2]);
+  modMoteur1 = atan2(MatriceGimbal[1][0], MatriceGimbal[0][0]);
+
+// Conversion en degrés
+  modMoteur1 *= 180.0 / M_PI;
+  modMoteur2 *= 180.0 / M_PI;
+  modMoteur3 *= 180.0 / M_PI;
+
+Serial.println(modMoteur1);
+Serial.println(modMoteur2);
+Serial.println(modMoteur3);
+
+}
+
+// loop 3
+/* 
+void loop() {
+  getAngles();
+  updatemotorposition(angle_yaw, angle_pitch, angle_roll, 0,  0, 0);
+  delay(100);  // Update rate
+  
+}
+*/
+
 
 void loop() {
-  //getAngles();
-  //delay(500);
+
+  mpu.update();  // Update sensor data
+   
+  if ((millis() - timer) > 10) {  // Print data every 10ms
+    // Décale le pitch de +90 pour que 0 soit à -90
+    float pitch = mpu.getAngleX() + 90;
+   
+    // Assure que le pitch reste entre -180 et 180
+    if (pitch > 180) pitch -= 360;  // Si pitch > 180, soustrait 360 pour revenir dans la plage [-180, 180]
+    if (pitch < -180) pitch += 360; // Si pitch < -180, ajoute 360 pour revenir dans la plage [-180, 180]
+    
+    /*
+    if (abs(mpu.getAngleZ() - last_Yaw) >  0.04){
+      angle_yaw= angle_yaw + (mpu.getAngleZ()- last_Yaw);
+    }
+    if (abs(pitch - last_pitch) >  0.02){
+      angle_pitch=pitch;
+    }
+    if (abs(mpu.getAngleY() - last_Roll) >  0.02){
+      angle_roll=mpu.getAngleY();
+    }
+    last_Yaw=mpu.getAngleZ();
+    last_pitch=pitch;
+    last_Roll=mpu.getAngleY();
+    */
+
+    angle_yaw=mpu.getAngleZ();
+    angle_roll=mpu.getAngleX();
+    angle_pitch=mpu.getAngleY();
   
-  angle_yaw=0;
-  angle_pitch=10;
-  angle_roll=10;
+      updatemotorposition(angle_yaw, angle_pitch, angle_roll, 0,  0, 0);
 
-  updatemotorposition(angle_yaw, angle_pitch, angle_roll, 0,  0, 0);
-  testEulerToQuaternion();
-  testQuaternionInverse();
-  testToEuler();
 
- Serial.println("motorYaw: ");
-  Serial.println(motorYaw);
-  Serial.println("motorPitch: ");
-  Serial.println(motorPitch);
-  Serial.println("motorRoll: ");
-  Serial.println(motorRoll);
+      sendNewPositionToMotors();
+    
+
+    // Affiche les données du pitch décalé
+    Serial.print("X: ");
+    Serial.print(pitch);  // Pitch décalé
+    Serial.print("  Y: ");
+    Serial.print(mpu.getAngleY());  // Roll (non modifié)
+    Serial.print("  Z: ");
+    Serial.println(mpu.getAngleZ());  // Yaw (non modifié)
+     
+    timer = millis();
+  }
+  
+
+  //testEulerToQuaternion();
+  //testQuaternionInverse();
+  //testToEuler();
+
+ //Serial.println("motorYaw: ");
+  //Serial.println(motorYaw);
+  //Serial.println("motorPitch: ");
+  //Serial.println(motorPitch);
+  //Serial.println("motorRoll: ");
+  //Serial.println(motorRoll);
 
   
   //sendNewPositionToMotors();
 
 }
+
+
+ // test gyiro
+/*
+MPU9250 mpu;
+
+void setup() {
+    Serial.begin(115200);
+    Wire.begin();
+    delay(2000);
+
+    MPU9250Setting setting;
+    setting.accel_fs_sel = ACCEL_FS_SEL::A16G;
+    setting.gyro_fs_sel = GYRO_FS_SEL::G2000DPS;
+    setting.mag_output_bits = MAG_OUTPUT_BITS::M16BITS;
+    setting.fifo_sample_rate = FIFO_SAMPLE_RATE::SMPL_200HZ;
+    setting.gyro_fchoice = 0x03;
+    setting.gyro_dlpf_cfg = GYRO_DLPF_CFG::DLPF_41HZ;
+    setting.accel_fchoice = 0x01;
+    setting.accel_dlpf_cfg = ACCEL_DLPF_CFG::DLPF_45HZ;
+
+    if (!mpu.setup(0x68, setting)) {  // change to your own address
+        while (1) {
+            Serial.println("MPU connection failed. Please check your connection with `connection_check` example.");
+            delay(5000);
+        }
+    }
+}
+
+void print_roll_pitch_yaw() {
+  Serial.print("Yaw, Pitch, Roll: ");
+  Serial.print(mpu.getYaw(), 2);
+  Serial.print(", ");
+  Serial.print(mpu.getPitch(), 2);
+  Serial.print(", ");
+  Serial.println(mpu.getRoll(), 2);
+}
+
+void loop() {
+    if (mpu.update()) {
+        print_roll_pitch_yaw();
+    }
+}
+*/
 
 
 
