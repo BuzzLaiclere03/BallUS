@@ -1,3 +1,4 @@
+
 // GRO400 - Exemple d'utilisation du OpenRB avec un moteur Dynamixel sous Platform.IO.
 // Basé sur l'exemple de Position Control.
 // Opère un moteur (à définir par la variable DXL_ID - 1 par défaut) en position en le faisant passer
@@ -15,7 +16,6 @@
 
 #include <MPU6050_light.h>
 //#include "MPU9250.h" 
-
 
 // Please modify it to suit your hardware.
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560) // When using DynamixelShield
@@ -53,12 +53,13 @@
   const int DXL_DIR_PIN = 2; // DYNAMIXEL Shield DIR PIN
 #endif
  
+int mode = 2; //1 = HMI controle position exacte 2 = IMU  3= YOLO 4 = jeu 5 = home
 
 const uint8_t DXL_ID1 = 20;
 const uint8_t DXL_ID2 = 15;
 const uint8_t DXL_ID3 = 40; 
 
-const uint8_t ANGLE_0_DXL_ID1 = 180; //a verif
+const uint8_t ANGLE_0_DXL_ID1 = 171; //a verif
 const uint8_t ANGLE_0_DXL_ID2 = 188; //a verif
 const uint8_t ANGLE_0_DXL_ID3 = 180; //a verif
 
@@ -73,8 +74,6 @@ const int MPU = 0x68;
 int16_t AcX, AcY, AcZ, Tmp, GyX, GyY, GyZ;
 int AcXcal, AcYcal, AcZcal, GyXcal, GyYcal, GyZcal, tcal;
 //double t, tx, tf, pitch, roll, yaw =0;
-
-//float angle =0, ax=0, ay=0, az=0;
 
 double previousTime = 0.0;
 
@@ -110,6 +109,19 @@ unsigned long timer = 0;
 float last_Yaw=0;
 float last_pitch=0;
 float last_Roll=0;
+
+int motorYaw = 0;
+int motorPitch = 0;
+int motorRoll = 0;
+
+int oldMotorYaw = 0;
+int oldMotorPitch = 0;
+
+int motorYawHMI = 0;
+int motorPitchHMI = 0;
+int motorRollHMI =0;
+
+#define LED_PIN 6  // Choisir un pin numérique
 
 //-------------------------------------------------------------------- Initiation pour le calcule de yaw pitch roll -------------------------------------------------------------------------------------
 
@@ -206,10 +218,7 @@ Quaternion1 eulerToQuaternion(float yaw, float pitch, float roll) {
 // --------------------------------------------------------------------- initiation pour quaternion 
 // Angles de référence du gimbal
 Quaternion1 gimbalReference = {1, 0, 0, 0};
-
-int motorYaw = 0;
-int motorPitch = 0;
-int motorRoll = 0;
+   
 
 void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC, float qB ) {
     // Convertir en quaternion
@@ -250,78 +259,6 @@ void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC,
 
 
 
-// quaternion 2
-/*
-struct Quaternion {
-  double w, x, y, z;
-
-  // Normalisation
-  void normalize() {
-      double norm = std::sqrt(w * w + x * x + y * y + z * z);
-      w /= norm;
-      x /= norm;
-      y /= norm;
-      z /= norm;
-  }
-
-  // Produit de quaternions
-  Quaternion operator*(const Quaternion& q) const {
-      return {
-          w * q.w - x * q.x - y * q.y - z * q.z,
-          w * q.x + x * q.w + y * q.z - z * q.y,
-          w * q.y - x * q.z + y * q.w + z * q.x,
-          w * q.z + x * q.y - y * q.x + z * q.w
-      };
-  }
-
-
-  // Multiplication d'un quaternion par un scalaire
-  Quaternion operator*(double scalar) const {
-    return {w * scalar, x * scalar, y * scalar, z * scalar};
-  }
-
-  // Addition
-  Quaternion operator+(const Quaternion& q) const {
-    return {w + q.w, x + q.x, y + q.y, z + q.z};
-  }
-  // Conversion en angles d'Euler
-  void toEuler(float &yaw, float &pitch, float &roll) const {
-    yaw = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z)) * 180.0 / PI;
-    pitch = asin(2.0 * (w * y - z * x)) * 180.0 / PI;
-    roll = atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)) * 180.0 / PI;
-  }
-};
-
-int motorYaw = 0;
-int motorPitch = 0;
-int motorRoll = 0;
-
-// Mise à jour du quaternion avec la vitesse angulaire
-void updateQuaternion(Quaternion& q, double wx, double wy, double wz, double dt) {
-  // Conversion en quaternion de la vitesse angulaire
-  Quaternion omega = {0, -wx, -wy, -wz};
-
-  // Calcul de dq/dt = 0.5 * q * omega
-  Quaternion dq = (q * omega) * (0.5 * dt);
-
-  // Mise à jour du quaternion
-  q = q + dq;
-
-  // Normalisation pour éviter les erreurs numériques
-  q.normalize();
-
-  float yawComp, pitchComp, rollComp;
-  q.toEuler(yawComp, pitchComp, rollComp);
-
-
-  // Convertir en position moteur (0 à 360°)
-  motorYaw = int(fmod((yawComp), 360));
-  motorPitch = int(fmod((pitchComp), 360));
-  motorRoll = int(fmod((rollComp), 360));
-  
-
-}
-*/
 
 // ---------------------------------------------------------------  Kalman filter functions ------------------------------------------------------
 void updateKalmanFilter(float *angle, float *bias, float *P, float newAngle, float newRate, float dt) {
@@ -352,55 +289,7 @@ void updateKalmanFilter(float *angle, float *bias, float *P, float newAngle, flo
   P[3] -= K[1] * P01_temp;
 }
 
-// angle original
-/*
 
-void getAngle(int Ax, int Ay, int Az, int Gy) {
- double x = Ax;
- double y = Ay;
- double z = Az;
-
- double yaw_rad =0;
-
- pitch = -(atan2(z, sqrt(y * y)));
-
- roll = atan2(x , sqrt((y * y)));
-
- //yaw = atan(x / sqrt((z * z)+(y * y)));
- 
- double currentTime = millis() / 1000.0; // Temps en secondes //unsigned long     micros() au lieu de millis
- double deltaTime = currentTime - previousTime;    //unsigned long
- previousTime = currentTime;
- //Serial.println("deltaTime: ");
-//Serial.println(deltaTime);
-//Intégrer la vitesse angulaire pour obtenir l'angle yaw
-if (Gy > 100 || Gy < -100)                                                       // float gyroY = readGyroY() / GYRO_SENSITIVITY;
-{
-  yaw_rad += (-Gy/600) * deltaTime;
-  Serial.println("Hello ");
-}
-double a ;
-  a = (-Gy/600) * deltaTime;
-  Serial.println("a ");
-  Serial.println(a);
- //pitch = pitch * (180.0 / PI) + initialPitch;
- //roll = roll * (180.0 / PI) + initialRoll;
- //yaw = yaw_rad * (180.0 / PI) + initialYaw;
- 
-
-  // Convertir en position moteur (0 à 360°)
-  pitch = int(fmod((pitch * (180.0 / PI) + initialPitch ), 360));
-  roll = int(fmod((roll * (180.0 / PI) + initialRoll ), 360));
-  yaw = int(fmod((yaw_rad * (180.0 / PI) + initialYaw ), 360));
-
- Serial.println("yaw: ");
- Serial.println(yaw);
- Serial.println("roll: ");
- Serial.println(roll);
- Serial.println("pitch: ");
- Serial.println(pitch);
-
-}
 
 
 float DegToRad(float angle) {
@@ -410,605 +299,6 @@ float DegToRad(float angle) {
 
 float RadToDeg(float angle) {
   angle = ((angle) * 180 / M_PI);
-  return angle; // Convertit les degrés en radians
-}
-
-float sinDeg(float angle) {
-    return sin(DegToRad(angle)); // Convertit en radians et applique sin()
-}
-float cosDeg(float angle) {
-    return cos(DegToRad(angle)); // Convertit en radians et applique cos()
-}
-
-void readAngle() {
-  //Lecture angle des moteurs
-  qA = dxl.getPresentPosition(DXL_ID1, UNIT_DEGREE);
-  qB = dxl.getPresentPosition(DXL_ID2, UNIT_DEGREE);
-  qC = dxl.getPresentPosition(DXL_ID3, UNIT_DEGREE);
-
-  // Convertir en position moteur (0 à 360°)
-  //qA = int(fmod((qA), 360));
- //qB = int(fmod((qB), 360));
- //qC = int(fmod((qA), 360));
-
-
-  //Serial.println(qA);
-  //Serial.println(qB);
-  //Serial.println(qC);
-}
-
-
-void readIMU() 
-{
-  Wire.beginTransmission(MPU);
-  Wire.write(0x3B);
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU, 14, true);
-  AcXcal = -950;
-  AcYcal = -300;
-  AcZcal = 0;
-  tcal = -1600;
-  GyXcal = 480;
-  GyYcal = 170;
-  GyZcal = 210;
-  AcX = Wire.read() << 8 | Wire.read();
-  AcY = Wire.read() << 8 | Wire.read();
-  AcZ = Wire.read() << 8 | Wire.read();
-  Tmp = Wire.read() << 8 | Wire.read();
-
-  GyX = Wire.read() << 8 | Wire.read();
-  GyY = Wire.read() << 8 | Wire.read();
-  GyZ = Wire.read() << 8 | Wire.read();
-  tx = Tmp + tcal;
-  t = tx / 340 + 36.53;
-  tf = (t * 9 / 5) + 32;
-  //Serial.println("AcX: ");
-  //Serial.println(AcX);
-  //Serial.println("AcY: ");
-  //Serial.println(AcY);
-  //Serial.println("AcZ: ");
-  //Serial.println(AcZ);
-
-  //Serial.println("GyX: ");
-  //Serial.println(GyX);
-  //Serial.println("GyY: ");
-  //Serial.println(GyY);
-  //Serial.println("GyZ: ");
-  //Serial.println(GyZ);
-}
-*/
-
-// -----------------------------------------------------------------  sendNewPositionToMotors ----------------------------------------------------------
-
-void sendNewPositionToMotors()
-{
-  float Motor1GoToPosition = ANGLE_0_DXL_ID1  + motorYaw;
-  float Motor2GoToPosition = ANGLE_0_DXL_ID2  + motorRoll;
-  float Motor3GoToPosition = ANGLE_0_DXL_ID3 + motorPitch;
-
-  //Verification que les angles restent entre 0 et 360 car les moteurs couvrent seulement entre ces 2 bornes
-  if (Motor1GoToPosition > 360)
-  {
-    Motor1GoToPosition = 360;
-  }
-
-  if (Motor1GoToPosition < 0)
-  {
-    Motor1GoToPosition = 0;
-  }
-
-  if (Motor2GoToPosition > 360)
-  {
-    Motor2GoToPosition = 360;
-  }
-
-  if (Motor2GoToPosition < 0)
-  {
-    Motor2GoToPosition = 0;
-  }
-
-  if (Motor3GoToPosition > 360)
-  {
-    Motor3GoToPosition = 360;
-  }
-
-  if (Motor3GoToPosition < 0)
-  {
-    Motor3GoToPosition = 0;
-  }
-
-  if (fabs((Motor1GoToPosition) -  lastAngle1) >= seuil )  
-  {
-    dxl.setGoalPosition(DXL_ID1, Motor1GoToPosition, UNIT_DEGREE);
-    lastAngle1 = Motor1GoToPosition;
-  }
-  
-  if (fabs((Motor2GoToPosition) -  lastAngle2) >= seuil  )  
-  {
-    dxl.setGoalPosition(DXL_ID2, Motor2GoToPosition, UNIT_DEGREE);
-    lastAngle2 = Motor2GoToPosition;
-  }
-
-  if (fabs((Motor3GoToPosition) -  lastAngle3) >= seuil )  
-  {
-    dxl.setGoalPosition(DXL_ID3, Motor3GoToPosition, UNIT_DEGREE);
-    lastAngle3 = Motor3GoToPosition;
-  }
-   
-  //delay(10);
-
-}
-
-
-// ---------------------------------------------------------------------- setup --------------------------------------------------------------------
-// setup 1
-/*
-void setup() {
-
-
- Wire.begin();
- Wire.beginTransmission(MPU);
- Wire.write(0x6B);
- Wire.write(0);
- Wire.endTransmission(true);
-
-  // put your setup code here, to run once:
-  delay(2000);    // Délai additionnel pour avoir le temps de lire les messages sur la console.
-  DEBUG_SERIAL.println("Starting position control ...");
-  
-  // Use UART port of DYNAMIXEL Shield to debug.
-  DEBUG_SERIAL.begin(115200);
-  while(!DEBUG_SERIAL); // On attend que la communication série pour les messages soit prête.
-
-  // Set Port baudrate to 57600bps. This has to match with DYNAMIXEL baudrate.
-  dxl.begin(57600);
-  if (dxl.getLastLibErrCode()) {
-    DEBUG_SERIAL.println("Could not init serial port!");
-    DEBUG_SERIAL.print("Last error code: ");
-    DEBUG_SERIAL.println(dxl.getLastLibErrCode());
-  }
-  // Set Port Protocol Version. This has to match with DYNAMIXEL protocol version.
-  if (!dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION)) {
-    DEBUG_SERIAL.println("Could not set protocol version!");
-    DEBUG_SERIAL.print("Last error code: ");
-    DEBUG_SERIAL.println(dxl.getLastLibErrCode());
-  }
-  // Get DYNAMIXEL information
-  bool ping = dxl.ping(DXL_ID1);
-  bool ping2 = dxl.ping(DXL_ID2);
-  bool ping3 = dxl.ping(DXL_ID3);
-  if (!ping || !ping2  || !ping3) {
-    DEBUG_SERIAL.println("Could not ping motor!");
-    DEBUG_SERIAL.print("Last error code: ");
-    DEBUG_SERIAL.println(dxl.getLastLibErrCode());
-
-    return;
-  }
-
-  // Turn off torque when configuring items in EEPROM area
-  dxl.torqueOff(DXL_ID1);
-  dxl.setOperatingMode(DXL_ID1, OP_POSITION);
-  dxl.torqueOn(DXL_ID1);
-  dxl.torqueOff(DXL_ID2);
-  dxl.setOperatingMode(DXL_ID2, OP_POSITION);
-  dxl.torqueOn(DXL_ID2);
-  dxl.torqueOff(DXL_ID3);
-  dxl.setOperatingMode(DXL_ID3, OP_POSITION);
-  dxl.torqueOn(DXL_ID3);
-
-  // Limit the maximum velocity in Position Control Mode. Use 0 for Max speed
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 30);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 30);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 30);
-
-  DEBUG_SERIAL.println("Super Setup done.");
-  DEBUG_SERIAL.print("Last error code: ");
-  DEBUG_SERIAL.println(dxl.getLastLibErrCode());
-  
-
-  dxl.setGoalPosition(DXL_ID1, ANGLE_0_DXL_ID1 + 0, UNIT_DEGREE);
-  dxl.setGoalPosition(DXL_ID2, ANGLE_0_DXL_ID2 + 0, UNIT_DEGREE);
-  dxl.setGoalPosition(DXL_ID3, ANGLE_0_DXL_ID3 + 0, UNIT_DEGREE);
-  delay(2000);
-  
-
-}
-*/
-
-// setup 2
-void setup() {
-  Wire.begin();
-  Serial.begin(9600);
-  
-  
-  byte status = mpu.begin();
-  Serial.print(F("MPU6050 status: "));
-  Serial.println(status);
- 
-  while (status != 0) {
-    // stop everything if could not connect to MPU6050
-    delay(100);
-  }
- 
-  Serial.println(F("Calculating offsets, do not move MPU6050"));
-  delay(1000);
-  mpu.calcOffsets(); // Gyro and accelerometer calibration
-  Serial.println("Done!\n");
- 
- 
-  //accelgyro.initialize();
-
- Wire.beginTransmission(MPU);
- Wire.write(0x6B);
- Wire.write(0);
- Wire.endTransmission(true);
-
-  // put your setup code here, to run once:
-  delay(2000);    // Délai additionnel pour avoir le temps de lire les messages sur la console.
-  DEBUG_SERIAL.println("Starting position control ...");
-  
-  // Use UART port of DYNAMIXEL Shield to debug.
-  DEBUG_SERIAL.begin(115200);
-  while(!DEBUG_SERIAL); // On attend que la communication série pour les messages soit prête.
-
-  // Set Port baudrate to 57600bps. This has to match with DYNAMIXEL baudrate.
-  dxl.begin(57600);
-  if (dxl.getLastLibErrCode()) {
-    DEBUG_SERIAL.println("Could not init serial port!");
-    DEBUG_SERIAL.print("Last error code: ");
-    DEBUG_SERIAL.println(dxl.getLastLibErrCode());
-  }
-  // Set Port Protocol Version. This has to match with DYNAMIXEL protocol version.
-  if (!dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION)) {
-    DEBUG_SERIAL.println("Could not set protocol version!");
-    DEBUG_SERIAL.print("Last error code: ");
-    DEBUG_SERIAL.println(dxl.getLastLibErrCode());
-  }
-  // Get DYNAMIXEL information
-  bool ping = dxl.ping(DXL_ID1);
-  bool ping2 = dxl.ping(DXL_ID2);
-  bool ping3 = dxl.ping(DXL_ID3);
-  if (!ping || !ping2  || !ping3) {
-    DEBUG_SERIAL.println("Could not ping motor!");
-    DEBUG_SERIAL.print("Last error code: ");
-    DEBUG_SERIAL.println(dxl.getLastLibErrCode());
-
-    return;
-  }
-
-  // Turn off torque when configuring items in EEPROM area
-  dxl.torqueOff(DXL_ID1);
-  dxl.setOperatingMode(DXL_ID1, OP_POSITION);
-  dxl.torqueOn(DXL_ID1);
-  dxl.torqueOff(DXL_ID2);
-  dxl.setOperatingMode(DXL_ID2, OP_POSITION);
-  dxl.torqueOn(DXL_ID2);
-  dxl.torqueOff(DXL_ID3);
-  dxl.setOperatingMode(DXL_ID3, OP_POSITION);
-  dxl.torqueOn(DXL_ID3);
-
-  // Limit the maximum velocity in Position Control Mode. Use 0 for Max speed
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 30);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 30);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 30);
-
-  DEBUG_SERIAL.println("Super Setup done.");
-  DEBUG_SERIAL.print("Last error code: ");
-  DEBUG_SERIAL.println(dxl.getLastLibErrCode());
-  
-
-  dxl.setGoalPosition(DXL_ID1, ANGLE_0_DXL_ID1 + 0, UNIT_DEGREE);
-  dxl.setGoalPosition(DXL_ID2, ANGLE_0_DXL_ID2 + 0, UNIT_DEGREE);
-  dxl.setGoalPosition(DXL_ID3, ANGLE_0_DXL_ID3 + 0, UNIT_DEGREE);
-  delay(2000);
-  
-}
-
-
- 
-
-
-
-// --------------------------------------------------------------------- get Angles ------------------------------------------------------------------
-/*
-void getAngles() {
-  accelgyro.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
- 
-  // Calculate Pitch and Roll based on accelerometer data
-  
-  //pitch = atan2(-az, sqrt(ay*ay + ax*ax)) * (180.0 / PI);  // Pitch
-  //roll = atan2(ax, sqrt(ay*ay + az*az)) * (180.0 / PI);   // Roll
-  
-  //pitch = atan2(az, ay) * (180.0 / PI);  // Pitch
-  //roll = atan2(ax, ay) * (180.0 / PI);   // Roll
-
-  pitch = atan2(ax, ay) * (180.0 / PI);  // Pitch
-  roll = atan2(az, ay) * (180.0 / PI);   // Roll
- 
-  // Apply the gyroscope data (integration over time)
-  long currentGyroTime = millis();
-  float dt = (currentGyroTime - lastGyroTime) / 1000.0;
-  lastGyroTime = currentGyroTime;
- 
-  // Gyro values in degrees per second
-  gyroX_rate = gz / 131.0;
-  gyroY_rate = gx / 131.0;
-  gyroZ_rate = gy / 131.0;
- 
-  // Update angles using gyroscope data
-  pitchGyro += gyroX_rate * dt;
-  rollGyro += gyroY_rate * dt;
-  yawGyro += gyroZ_rate * dt;
- 
-  // Yaw angle from magnetometer (assuming calibrated magnetometer)
-  //float magX = mx * cos(roll)  + mz * sin(pitch) * sin(roll) - my * cos(pitch) * sin(roll);
-  //float magY = mz * cos(pitch) + my * sin(pitch);
-  float magX = mz * cos(roll) + mx * sin(pitch) * sin(roll) - my * cos(pitch) * sin(roll);
-  float magY = mx * cos(pitch) + my * sin(pitch);
-  yaw = atan2(magY, magX) * (180.0 / PI);
-   
-
-  // Use complementary filter for yaw (fusing magnetometer and gyro)
-  float alpha = 0.98;  // Complementary filter constant
-  yaw = alpha * (yawGyro) + (1 - alpha) * yaw;  // Filtered yaw
- 
-  // Kalman filter for pitch and roll
-  updateKalmanFilter(&angle_pitch, &biasX, P_pitch, pitch, gyroX_rate, dt);
-  updateKalmanFilter(&angle_roll, &biasY, P_roll, roll, gyroY_rate, dt);
-  updateKalmanFilter(&angle_yaw, &biasZ, P_yaw, yaw, gyroZ_rate, dt);
-  
-  // Print out the angles
-  Serial.print("Pitch: ");
-  Serial.print(angle_pitch);
-  Serial.print("\tRoll: ");
-  Serial.print(angle_roll);
-  Serial.print("\tYaw: ");
-  Serial.println(angle_yaw);
-  
-}
-*/
-
-/*
-void getAngles() {
-  accelgyro.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
- 
-  // Calculate Pitch and Roll based on accelerometer data
-  pitch = atan2(ay, az) * (180.0 / PI);  // Pitch
-  roll = atan2(ax, az) * (180.0 / PI);   // Roll
- 
-  Serial.print("ax: ");
-  Serial.print(ax);
-  Serial.print("\tay: ");
-  Serial.print(ay);
-  Serial.print("\taz: ");
-  Serial.println(az);
-
-  // Apply the gyroscope data (integration over time)
-  long currentGyroTime = millis();
-  float dt = (currentGyroTime - lastGyroTime) / 1000.0;
-  lastGyroTime = currentGyroTime;
- 
-  // Gyro values in degrees per second
-  gyroX_rate = gx / 131.0;
-  gyroY_rate = gy / 131.0;
-  gyroZ_rate = gz / 131.0;
- 
-  // Update angles using gyroscope data
-  pitchGyro += gyroX_rate * dt;
-  rollGyro += gyroY_rate * dt;
-  yawGyro += gyroZ_rate * dt;
- 
-  // Yaw angle from magnetometer (assuming calibrated magnetometer)
-  float magX = mx * cos(roll) + my * sin(pitch) * sin(roll) - mz * cos(pitch) * sin(roll);
-  float magY = my * cos(pitch) + mz * sin(pitch);
-  yaw = atan2(magY, magX) * (180.0 / PI);
- 
-  // Use complementary filter for yaw (fusing magnetometer and gyro)
-  float alpha = 0.98;  // Complementary filter constant
-  yaw = alpha * (yawGyro) + (1 - alpha) * yaw;  // Filtered yaw
- 
-  // Kalman filter for pitch and roll
-  updateKalmanFilter(&angle_pitch, &biasX, P_pitch, pitch, gyroX_rate, dt);
-  updateKalmanFilter(&angle_roll, &biasY, P_roll, roll, gyroY_rate, dt);
-  updateKalmanFilter(&angle_yaw, &biasZ, P_yaw, yaw, gyroZ_rate, dt);
- 
-  // Print out the angles
-  Serial.print("Pitch: ");
-  Serial.print(angle_pitch);
-  Serial.print("\tRoll: ");
-  Serial.print(angle_roll);
-  Serial.print("\tYaw: ");
-  Serial.println(angle_yaw);
-}
-*/
-
-/*
-void getAngles() {
-  mpu.update();  // Update sensor data
- 
-  if ((millis() - timer) > 10) {  // Print data every 10ms
-    // Décale le pitch de +90 pour que 0 soit à -90
-    float pitch = mpu.getAngleX() + 90;
- 
-    // Assure que le pitch reste entre -180 et 180
-    if (pitch > 180) pitch -= 360;  // Si pitch > 180, soustrait 360 pour revenir dans la plage [-180, 180]
-    if (pitch < -180) pitch += 360; // Si pitch < -180, ajoute 360 pour revenir dans la plage [-180, 180]
- 
-    // Affiche les données du pitch décalé
-    Serial.print("X: ");
-    Serial.print(pitch);  // Pitch décalé
-    Serial.print("  Y: ");
-    Serial.print(mpu.getAngleY());  // Roll (non modifié)
-    Serial.print("  Z: ");
-    Serial.println(mpu.getAngleZ());  // Yaw (non modifié)
-   
-    timer = millis();
-  }
-}
-*/
-
-/*
-void getAngles() {
-  accelgyro.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
- 
-  // Calculate Pitch and Roll based on accelerometer data
-  pitch = atan2(ay, az) * (180.0 / PI);  // Pitch
-  roll = atan2(ax, az) * (180.0 / PI);   // Roll
- 
-  // Apply the gyroscope data (integration over time)
-  long currentGyroTime = millis();
-  float dt = (currentGyroTime - lastGyroTime) / 1000.0;
-  lastGyroTime = currentGyroTime;
- 
-  // Gyro values in degrees per second
-  gyroX_rate = gx / 131.0;
-  gyroY_rate = gy / 131.0;
-  gyroZ_rate = gz / 131.0;
- 
-  // Update angles using gyroscope data
-  pitchGyro += gyroX_rate * dt;
-  rollGyro += gyroY_rate * dt;
-  yawGyro += gyroZ_rate * dt;
- 
-  // Yaw angle from magnetometer (assuming calibrated magnetometer)
-  float magX = mx * cos(roll) + my * sin(pitch) * sin(roll) - mz * cos(pitch) * sin(roll);
-  float magY = my * cos(pitch) + mz * sin(pitch);
-  yaw = atan2(magY, magX) * (180.0 / PI);
- 
-  // Use complementary filter for yaw (fusing magnetometer and gyro)
-  float alpha = 0.98;  // Complementary filter constant
-  yaw = alpha * (yawGyro) + (1 - alpha) * yaw;  // Filtered yaw
- 
-  // Kalman filter for pitch and roll
-  updateKalmanFilter(&angle_pitch, &biasX, P_pitch, pitch, gyroX_rate, dt);
-  updateKalmanFilter(&angle_roll, &biasY, P_roll, roll, gyroY_rate, dt);
-  updateKalmanFilter(&angle_yaw, &biasZ, P_yaw, yaw, gyroZ_rate, dt);
- 
-  // Print out the angles
-  Serial.print("Pitch: ");
-  Serial.print(angle_pitch);
-  Serial.print("\tRoll: ");
-  Serial.print(angle_roll);
-  Serial.print("\tYaw: ");
-  Serial.println(angle_yaw);
-}
-  */
-
-// ------------------------------------------------------------------------ loop -----------------------------------------------------------------------
-// loop 1
-/*
-void loop() {
-
-  readIMU();
-
-  getAngle(AcX, AcY, AcZ, GyY);
-
-  readAngle();
-  
-  updatemotorposition(yaw, pitch, roll, 0,  0, 0);
-  
-  Serial.println("motorYaw: ");
-  Serial.println(motorYaw);
-  
-  Serial.println("motorPitch: ");
-  Serial.println(motorPitch);
-  Serial.println("motorRoll: ");
-  Serial.println(motorRoll);
-  
-
-  sendNewPositionToMotors();
-  
-}
-*/
-
-// loop 2
-/*
-Quaternion q = {1, 0, 0, 0};
-void loop() {
-
-  double currentTime = millis() / 1000.0; // Temps en secondes //unsigned long     micros() au lieu de millis
-  double dt = currentTime - previousTime;    //unsigned long
-  previousTime = currentTime;
-
-  readIMU();
-
-  GyX = GyX/600;
-  GyY = GyY/600;
-  GyZ = GyZ/600;
-
-  //readAngle();
-  
-  //Quaternion q = {1, qA, qC, qB};
-  
-  // Mise à jour du quaternion avec la vitesse angulaire
-  updateQuaternion(q, GyX, GyY, GyZ, dt);
-  
-  Serial.println("motorYaw: ");
-  Serial.println(motorYaw);
-
-
-  sendNewPositionToMotors();
-  
-}
-*/
-/*
-void testEulerToQuaternion() {
-  float yaw = 0, pitch = 10, roll = 10;
-  Quaternion1 q = eulerToQuaternion(yaw, pitch, roll);
-
-  Serial.println("Quaternion from Euler (10,10,0): ");
-  Serial.print("w: "); Serial.println(q.w,6);
-  Serial.print("x: "); Serial.println(q.x,6);
-  Serial.print("y: "); Serial.println(q.y,6);
-  Serial.print("z: "); Serial.println(q.z,6);
-}
-
-void testQuaternionInverse() {
-  Quaternion1 q = eulerToQuaternion(0, 10, 10);
-  Quaternion1 q_inv = q.inverse();
-
-  Serial.println("Inverse Quaternion: ");
-  Serial.print("w: "); Serial.println(q_inv.w,6);
-  Serial.print("x: "); Serial.println(q_inv.x,6);
-  Serial.print("y: "); Serial.println(q_inv.y,6);
-  Serial.print("z: "); Serial.println(q_inv.z,6);
-}
-void testToEuler() {
-  Quaternion1 q = eulerToQuaternion(0, 10, 10);
-  float yaw, pitch, roll;
-  q.toEuler(yaw, pitch, roll);
-
-  Serial.println("Euler Angles from Quaternion: ");
-  Serial.print("Yaw: "); Serial.println(yaw);
-  Serial.print("Pitch: "); Serial.println(pitch);
-  Serial.print("Roll: "); Serial.println(roll);
-}
-
-void testcalcule() {
-  Quaternion1 q = eulerToQuaternion(0, 10, 10);
-  Quaternion1 q_i = eulerToQuaternion(0, -10, -10);
-  Quaternion1 gimbalReference = eulerToQuaternion(0, 0, 0);
-  Quaternion1 q_corr = q.inverse() * gimbalReference;
-
-  Serial.println("Inverse Quaternion 1: ");
-  Serial.print("w: "); Serial.println(q_i.w,6);
-  Serial.print("x: "); Serial.println(q_i.x,6);
-  Serial.print("y: "); Serial.println(q_i.y,6);
-  Serial.print("z: "); Serial.println(q_i.z,6);
-
-  Serial.println("Inverse Quaternion 2: ");
-  Serial.print("w: "); Serial.println(q_corr.w,6);
-  Serial.print("x: "); Serial.println(q_corr.x,6);
-  Serial.print("y: "); Serial.println(q_corr.y,6);
-  Serial.print("z: "); Serial.println(q_corr.z,6);
-
-
-}
-*/
-
-// angle
-float DegToRad(float angle) {
-  angle = ((angle) * M_PI / 180.0);
   return angle; // Convertit les degrés en radians
 }
 
@@ -1030,390 +320,90 @@ void afficherMatrice(float matrice33[3][3]){
   }
 }
 
-
 void multiplierMatrices() {
-//Lecture angle des moteurs
-qA = dxl.getPresentPosition(DXL_ID1, UNIT_DEGREE) - ANGLE_0_DXL_ID1;
-qB = dxl.getPresentPosition(DXL_ID2, UNIT_DEGREE) - ANGLE_0_DXL_ID2;
-qC = dxl.getPresentPosition(DXL_ID3, UNIT_DEGREE)- ANGLE_0_DXL_ID3;
-Serial.println(qA);
-Serial.println(qB);
-Serial.println(qC);
-
-theta_x = angle_pitch;
-theta_y = angle_roll; 
-theta_z = angle_yaw;
-
-
-float MatriceMoteurs[3][3] = {
-  {(cosDeg(qC) * cosDeg(qA) - sinDeg(qC) * sinDeg(qB) * sinDeg(qA)), 
-   (cosDeg(qC) * sinDeg(qA) + sinDeg(qC) * sinDeg(qB) * cosDeg(qA)), 
-   (-sinDeg(qC) * cosDeg(qB))},
-
-  {(-cosDeg(qB) * sinDeg(qA)), 
-   (cosDeg(qB) * cosDeg(qA)), 
-   (sinDeg(qB))},
-
-  {(sinDeg(qC) * cosDeg(qA) + cosDeg(qC) * sinDeg(qB) * sinDeg(qA)), 
-   (sinDeg(qC) * sinDeg(qA) - cosDeg(qC) * sinDeg(qB) * cosDeg(qA)), 
-   (cosDeg(qC) * cosDeg(qB))}
-};
-
-float MatriceAccelero[3][3] = {
-  {(cosDeg(theta_y) * cosDeg(theta_z) - sinDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z)), 
-   (-cosDeg(theta_x) * sinDeg(theta_z)), 
-   (sinDeg(theta_y) * cosDeg(theta_z) + cosDeg(theta_y) * sinDeg(theta_x) * sinDeg(theta_z))},
-
-  {(cosDeg(theta_y) * sinDeg(theta_z) + sinDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z)), 
-   (cosDeg(theta_x) * cosDeg(theta_z)), 
-   (sinDeg(theta_y) * sinDeg(theta_z) - cosDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z))},
-
-  {(-sinDeg(theta_y) * cosDeg(theta_x)), 
-   (sinDeg(theta_x)), 
-   (cosDeg(theta_y) * cosDeg(theta_x))}
-};
-
-float MatriceGimbal[3][3] = {
-  {0.0, 0.0, 0.0}, 
-  {0.0, 0.0, 0.0}, 
-  {0.0, 0.0, 0.0}
-};
-
-
-  for (int i = 0; i < 3; i++) {
-      for (int j = 0; j < 3; j++) {
-          MatriceGimbal[i][j] = 0;
-          for (int k = 0; k < 3; k++) {
-              MatriceGimbal[i][j] += MatriceMoteurs[i][k] * MatriceAccelero[k][j];
-          }
-      }
-  }
-afficherMatrice(MatriceMoteurs);
-
-
-  modMoteur3 = atan2(-MatriceGimbal[2][0], sqrt(pow(MatriceGimbal[0][0], 2) + pow(MatriceGimbal[1][0], 2)));
-  modMoteur2 = atan2(MatriceGimbal[2][1], MatriceGimbal[2][2]);
-  modMoteur1 = atan2(MatriceGimbal[1][0], MatriceGimbal[0][0]);
-
-// Conversion en degrés
-  modMoteur1 *= 180.0 / M_PI;
-  modMoteur2 *= 180.0 / M_PI;
-  modMoteur3 *= 180.0 / M_PI;
-
-Serial.println(modMoteur1);
-Serial.println(modMoteur2);
-Serial.println(modMoteur3);
-
-}
-
-// loop 3
-/* 
-void loop() {
-  getAngles();
-  updatemotorposition(angle_yaw, angle_pitch, angle_roll, 0,  0, 0);
-  delay(100);  // Update rate
+  //Lecture angle des moteurs
+  qA = dxl.getPresentPosition(DXL_ID1, UNIT_DEGREE) - ANGLE_0_DXL_ID1;
+  qB = dxl.getPresentPosition(DXL_ID2, UNIT_DEGREE) - ANGLE_0_DXL_ID2;
+  qC = dxl.getPresentPosition(DXL_ID3, UNIT_DEGREE)- ANGLE_0_DXL_ID3;
+  Serial.println(qA);
+  Serial.println(qB);
+  Serial.println(qC);
   
-}
-*/
-
-
-void loop() {
-
-  mpu.update();  // Update sensor data
-   
-  if ((millis() - timer) > 10) {  // Print data every 10ms
-    // Décale le pitch de +90 pour que 0 soit à -90
-    float pitch = mpu.getAngleX() + 90;
-   
-    // Assure que le pitch reste entre -180 et 180
-    if (pitch > 180) pitch -= 360;  // Si pitch > 180, soustrait 360 pour revenir dans la plage [-180, 180]
-    if (pitch < -180) pitch += 360; // Si pitch < -180, ajoute 360 pour revenir dans la plage [-180, 180]
-    
-    /*
-    if (abs(mpu.getAngleZ() - last_Yaw) >  0.04){
-      angle_yaw= angle_yaw + (mpu.getAngleZ()- last_Yaw);
-    }
-    if (abs(pitch - last_pitch) >  0.02){
-      angle_pitch=pitch;
-    }
-    if (abs(mpu.getAngleY() - last_Roll) >  0.02){
-      angle_roll=mpu.getAngleY();
-    }
-    last_Yaw=mpu.getAngleZ();
-    last_pitch=pitch;
-    last_Roll=mpu.getAngleY();
-    */
-
-    angle_yaw=mpu.getAngleZ();
-    angle_roll=mpu.getAngleX();
-    angle_pitch=mpu.getAngleY();
+  theta_x = angle_pitch;
+  theta_y = angle_roll; 
+  theta_z = angle_yaw;
   
-      updatemotorposition(angle_yaw, angle_pitch, angle_roll, 0,  0, 0);
-
-
-      sendNewPositionToMotors();
-    
-
-    // Affiche les données du pitch décalé
-    Serial.print("X: ");
-    Serial.print(pitch);  // Pitch décalé
-    Serial.print("  Y: ");
-    Serial.print(mpu.getAngleY());  // Roll (non modifié)
-    Serial.print("  Z: ");
-    Serial.println(mpu.getAngleZ());  // Yaw (non modifié)
-     
-    timer = millis();
-  }
   
-
-  //testEulerToQuaternion();
-  //testQuaternionInverse();
-  //testToEuler();
-
- //Serial.println("motorYaw: ");
-  //Serial.println(motorYaw);
-  //Serial.println("motorPitch: ");
-  //Serial.println(motorPitch);
-  //Serial.println("motorRoll: ");
-  //Serial.println(motorRoll);
-
+  float MatriceMoteurs[3][3] = {
+    {(cosDeg(qC) * cosDeg(qA) - sinDeg(qC) * sinDeg(qB) * sinDeg(qA)), 
+     (cosDeg(qC) * sinDeg(qA) + sinDeg(qC) * sinDeg(qB) * cosDeg(qA)), 
+     (-sinDeg(qC) * cosDeg(qB))},
   
-  //sendNewPositionToMotors();
-
-}
-
-
- // test gyiro
-/*
-MPU9250 mpu;
-
-void setup() {
-    Serial.begin(115200);
-    Wire.begin();
-    delay(2000);
-
-    MPU9250Setting setting;
-    setting.accel_fs_sel = ACCEL_FS_SEL::A16G;
-    setting.gyro_fs_sel = GYRO_FS_SEL::G2000DPS;
-    setting.mag_output_bits = MAG_OUTPUT_BITS::M16BITS;
-    setting.fifo_sample_rate = FIFO_SAMPLE_RATE::SMPL_200HZ;
-    setting.gyro_fchoice = 0x03;
-    setting.gyro_dlpf_cfg = GYRO_DLPF_CFG::DLPF_41HZ;
-    setting.accel_fchoice = 0x01;
-    setting.accel_dlpf_cfg = ACCEL_DLPF_CFG::DLPF_45HZ;
-
-    if (!mpu.setup(0x68, setting)) {  // change to your own address
-        while (1) {
-            Serial.println("MPU connection failed. Please check your connection with `connection_check` example.");
-            delay(5000);
+    {(-cosDeg(qB) * sinDeg(qA)), 
+     (cosDeg(qB) * cosDeg(qA)), 
+     (sinDeg(qB))},
+  
+    {(sinDeg(qC) * cosDeg(qA) + cosDeg(qC) * sinDeg(qB) * sinDeg(qA)), 
+     (sinDeg(qC) * sinDeg(qA) - cosDeg(qC) * sinDeg(qB) * cosDeg(qA)), 
+     (cosDeg(qC) * cosDeg(qB))}
+  };
+  
+  float MatriceAccelero[3][3] = {
+    {(cosDeg(theta_y) * cosDeg(theta_z) - sinDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z)), 
+     (-cosDeg(theta_x) * sinDeg(theta_z)), 
+     (sinDeg(theta_y) * cosDeg(theta_z) + cosDeg(theta_y) * sinDeg(theta_x) * sinDeg(theta_z))},
+  
+    {(cosDeg(theta_y) * sinDeg(theta_z) + sinDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z)), 
+     (cosDeg(theta_x) * cosDeg(theta_z)), 
+     (sinDeg(theta_y) * sinDeg(theta_z) - cosDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z))},
+  
+    {(-sinDeg(theta_y) * cosDeg(theta_x)), 
+     (sinDeg(theta_x)), 
+     (cosDeg(theta_y) * cosDeg(theta_x))}
+  };
+  
+  float MatriceGimbal[3][3] = {
+    {0.0, 0.0, 0.0}, 
+    {0.0, 0.0, 0.0}, 
+    {0.0, 0.0, 0.0}
+  };
+  
+  
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            MatriceGimbal[i][j] = 0;
+            for (int k = 0; k < 3; k++) {
+                MatriceGimbal[i][j] += MatriceMoteurs[i][k] * MatriceAccelero[k][j];
+            }
         }
     }
-}
-
-void print_roll_pitch_yaw() {
-  Serial.print("Yaw, Pitch, Roll: ");
-  Serial.print(mpu.getYaw(), 2);
-  Serial.print(", ");
-  Serial.print(mpu.getPitch(), 2);
-  Serial.print(", ");
-  Serial.println(mpu.getRoll(), 2);
-}
-
-void loop() {
-    if (mpu.update()) {
-        print_roll_pitch_yaw();
-    }
-}
-*/
-
-
-
-// code teste 1
-/*
-#include <Wire.h>
-#include <MPU9250_WE.h>
-#include <math.h>
-
-#define MPU9250_ADDR 0x68
-MPU9250_WE imu = MPU9250_WE(MPU9250_ADDR);
-
-// Définition de la structure de quaternion
-struct Quaternion {
-    double w, x, y, z;
-
-    // Normalisation du quaternion
-    void normalize() {
-        double norm = sqrt(w * w + x * x + y * y + z * z);
-        w /= norm; x /= norm; y /= norm; z /= norm;
-    }
-
-    // Produit de quaternions
-    Quaternion operator*(const Quaternion& q) const {
-        return {
-            w * q.w - x * q.x - y * q.y - z * q.z,
-            w * q.x + x * q.w + y * q.z - z * q.y,
-            w * q.y - x * q.z + y * q.w + z * q.x,
-            w * q.z + x * q.y - y * q.x + z * q.w
-        };
-    }
-
-    // Multiplication par un scalaire
-    Quaternion operator*(double scalar) const {
-        return {w * scalar, x * scalar, y * scalar, z * scalar};
-    }
-
-    // Addition de quaternions
-    Quaternion operator+(const Quaternion& q) const {
-        return {w + q.w, x + q.x, y + q.y, z + q.z};
-    }
-
-    // Conversion en angles d'Euler
-    void toEuler(float &yaw, float &pitch, float &roll) const {
-        yaw = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z)) * 180.0 / M_PI;
-        pitch = asin(2.0 * (w * y - z * x)) * 180.0 / M_PI;
-        roll = atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)) * 180.0 / M_PI;
-    }
-};
-
-// Variables globales
-Quaternion q = {1, 0, 0, 0};
-int motorYaw = 0, motorPitch = 0, motorRoll = 0;
-
-// Initialisation de l'IMU
-void setup() {
-    Serial.begin(115200);
-    Wire.begin();
-
-    // Set Port baudrate to 57600bps. This has to match with DYNAMIXEL baudrate.
-  dxl.begin(57600);
-  if (dxl.getLastLibErrCode()) {
-    DEBUG_SERIAL.println("Could not init serial port!");
-    DEBUG_SERIAL.print("Last error code: ");
-    DEBUG_SERIAL.println(dxl.getLastLibErrCode());
-  }
-  // Set Port Protocol Version. This has to match with DYNAMIXEL protocol version.
-  if (!dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION)) {
-    DEBUG_SERIAL.println("Could not set protocol version!");
-    DEBUG_SERIAL.print("Last error code: ");
-    DEBUG_SERIAL.println(dxl.getLastLibErrCode());
-  }
-  // Get DYNAMIXEL information
-  bool ping = dxl.ping(DXL_ID1);
-  bool ping2 = dxl.ping(DXL_ID2);
-  bool ping3 = dxl.ping(DXL_ID3);
-  if (!ping || !ping2  || !ping3) {
-    DEBUG_SERIAL.println("Could not ping motor!");
-    DEBUG_SERIAL.print("Last error code: ");
-    DEBUG_SERIAL.println(dxl.getLastLibErrCode());
-
-    return;
-  }
-
-  // Turn off torque when configuring items in EEPROM area
-  dxl.torqueOff(DXL_ID1);
-  dxl.setOperatingMode(DXL_ID1, OP_POSITION);
-  dxl.torqueOn(DXL_ID1);
-  dxl.torqueOff(DXL_ID2);
-  dxl.setOperatingMode(DXL_ID2, OP_POSITION);
-  dxl.torqueOn(DXL_ID2);
-  dxl.torqueOff(DXL_ID3);
-  dxl.setOperatingMode(DXL_ID3, OP_POSITION);
-  dxl.torqueOn(DXL_ID3);
-
-  // Limit the maximum velocity in Position Control Mode. Use 0 for Max speed
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 30);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 30);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 30);
-
-  DEBUG_SERIAL.println("Super Setup done.");
-  DEBUG_SERIAL.print("Last error code: ");
-  DEBUG_SERIAL.println(dxl.getLastLibErrCode());
+  afficherMatrice(MatriceMoteurs);
   
+  
+    modMoteur3 = atan2(-MatriceGimbal[2][0], sqrt(pow(MatriceGimbal[0][0], 2) + pow(MatriceGimbal[1][0], 2)));
+    modMoteur2 = atan2(MatriceGimbal[2][1], MatriceGimbal[2][2]);
+    modMoteur1 = atan2(MatriceGimbal[1][0], MatriceGimbal[0][0]);
+  
+  // Conversion en degrés
+    modMoteur1 *= 180.0 / M_PI;
+    modMoteur2 *= 180.0 / M_PI;
+    modMoteur3 *= 180.0 / M_PI;
+  
+  Serial.println(modMoteur1);
+  Serial.println(modMoteur2);
+  Serial.println(modMoteur3);
+  }
 
-  dxl.setGoalPosition(DXL_ID1, ANGLE_0_DXL_ID1 + 0, UNIT_DEGREE);
-  dxl.setGoalPosition(DXL_ID2, ANGLE_0_DXL_ID2 + 0, UNIT_DEGREE);
-  dxl.setGoalPosition(DXL_ID3, ANGLE_0_DXL_ID3 + 0, UNIT_DEGREE);
-  delay(2000);
+void readAngle() {
+  //Lecture angle des moteurs
+  qA = dxl.getPresentPosition(DXL_ID1, UNIT_DEGREE);
+  qB = dxl.getPresentPosition(DXL_ID2, UNIT_DEGREE);
+  qC = dxl.getPresentPosition(DXL_ID3, UNIT_DEGREE);
 
-    if (!imu.init()) {
-        Serial.println("Erreur : MPU9250 non détecté !");
-        while (1);
-    }
-
-    imu.enableAccDLPF(true);
-    imu.enableGyrDLPF();
-    imu.initMagnetometer();
-
-    Serial.println("IMU prête !");
-    previousTime = millis() / 1000.0; // Temps initial
 }
 
-// Lecture des données de l'IMU
-void readIMU2(double &wx, double &wy, double &wz, double &ax, double &ay, double &az, double &mx, double &my, double &mz) {
-    xyzFloat gyr = imu.getGyrValues();
-    wx = gyr.x; wy = gyr.y; wz = gyr.z;
 
-    xyzFloat acc = imu.getAccRawValues();
-    ax = acc.x; ay = acc.y; az = acc.z;
 
-    xyzFloat mag = imu.getMagValues();
-    mx = mag.x; my = mag.y; mz = mag.z;
-
-    Serial.println("wx: ");
-    Serial.println(wx);
-}
-
-// Mise à jour des quaternions avec correction par le magnétomètre
-void updateQuaternion(Quaternion &q, double wx, double wy, double wz, double ax, double ay, double az, double mx, double my, double mz, double dt) {
-    // Création du quaternion de vitesse angulaire
-    Quaternion omega = {0, wx, wy, wz};
-
-    // Calcul de dq/dt = 0.5 * q * omega
-    Quaternion dq = (q * omega) * (0.5 * dt);
-
-    // Mise à jour du quaternion
-    q = q + dq;
-    q.normalize();
-
-    // Correction avec l'accéléromètre et le magnétomètre (Fusion de capteurs)
-    float normAcc = sqrt(ax * ax + ay * ay + az * az);
-    ax /= normAcc; ay /= normAcc; az /= normAcc;
-
-    float normMag = sqrt(mx * mx + my * my + mz * mz);
-    mx /= normMag; my /= normMag; mz /= normMag;
-
-    // Calcul de la direction de la gravité avec le quaternion
-    double vx = 2 * (q.x * q.z - q.w * q.y);
-    double vy = 2 * (q.w * q.x + q.y * q.z);
-    double vz = 1 - 2 * (q.x * q.x + q.y * q.y);
-
-    // Correction de l'erreur de dérive
-    double ex = (ay * vz - az * vy) + (my * vy - mz * vx);
-    double ey = (az * vx - ax * vz) + (mz * vx - mx * vz);
-    double ez = (ax * vy - ay * vx) + (mx * vy - my * vx);
-
-    // Ajustement du gyroscope avec la correction d'erreur
-    wx += 0.1 * ex;
-    wy += 0.1 * ey;
-    wz += 0.1 * ez;
-
-    // Mise à jour du quaternion corrigé
-    omega = {0, wx, wy, wz};
-    dq = (q * omega) * (0.5 * dt);
-    q = q + dq;
-    q.normalize();
-
-    // Conversion en angles
-    float yawComp, pitchComp, rollComp;
-    q.toEuler(yawComp, pitchComp, rollComp);
-
-    // Convertir en position moteur (0 à 360°)
-    motorYaw = int(fmod(yawComp, 360));
-    motorPitch = int(fmod(pitchComp, 360));
-    motorRoll = int(fmod(rollComp, 360));
-}
-
-// Mise à jour de la position des moteurs
 void sendNewPositionToMotors()
 {
   float Motor1GoToPosition = ANGLE_0_DXL_ID1  + motorYaw;
@@ -1431,9 +421,9 @@ void sendNewPositionToMotors()
     Motor1GoToPosition = 0;
   }
 
-  if (Motor2GoToPosition > 360)
+  if (Motor2GoToPosition > 180+70)
   {
-    Motor2GoToPosition = 360;
+    Motor2GoToPosition = 180+70;
   }
 
   if (Motor2GoToPosition < 0)
@@ -1469,271 +459,210 @@ void sendNewPositionToMotors()
     lastAngle3 = Motor3GoToPosition;
   }
    
-  //delay(10);
+  //delay(50);
 
 }
 
-// Boucle principale
-void loop() {
-    double currentTime = millis() / 1000.0;
-    double dt = currentTime - previousTime;
-    previousTime = currentTime;
-
-    double wx, wy, wz, ax, ay, az, mx, my, mz;
-    readIMU2(wx, wy, wz, ax, ay, az, mx, my, mz);
-
-    updateQuaternion(q, wx, wy, wz, ax, ay, az, mx, my, mz, dt);
-    sendNewPositionToMotors();
+void sendAngleToHMI(){
+  readAngle();
+  Serial.print(qA-ANGLE_0_DXL_ID1);
+  Serial.print(",");
+  Serial.print(qB-ANGLE_0_DXL_ID2);
+  Serial.print(",");
+  Serial.println(qC-ANGLE_0_DXL_ID3);
 }
 
-*/
-
-// code gyro 1
-/*
-#include <Wire.h>
-
-// Adresse I2C du MPU9250
-#define MPU_ADDR 0x68  // Adresse du MPU9250, à vérifier si c'est 0x68 ou 0x69 en fonction du câblage
-#define AK8963_ADDR 0x0C // Adresse du magnétomètre AK8963
-
-// Registres du MPU9250 et AK8963
-#define WHO_AM_I_MPU9250 0x75
-#define PWR_MGMT_1 0x6B
-#define ACCEL_XOUT_H 0x3B
-#define GYRO_XOUT_H 0x43
-#define MAGNETOMETER_XOUT_L 0x03
-
-// Variables pour les données des capteurs
-int16_t ax2, ay2, az2;
-int16_t gx, gy, gz;
-int16_t mx, my, mz;
-
-// Calibration (si nécessaire)
-float accX, accY, accZ;
-
-// Fonction d'initialisation du MPU9250
-void initMPU9250() {
-  Wire.beginTransmission(MPU_ADDR);
-  Wire.write(PWR_MGMT_1);  // Accéder au registre de gestion de l'alimentation
-  Wire.write(0x00);  // Sortir du mode veille
-  Wire.endTransmission(true);
-
-  // Vérifier la connexion au MPU9250
-  Wire.beginTransmission(MPU_ADDR);
-  Wire.write(WHO_AM_I_MPU9250);  // Lire l'identifiant
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU_ADDR, 1, true);
-  uint8_t whoAmI = Wire.read();
-  if (whoAmI == 0x71) {
-    Serial.println("MPU9250 est connecté.");
-  } else {
-    Serial.println("MPU9250 non connecté!");
+void receiveModeAndAngleFromHMI(){
+  if (Serial.available() > 0) {
+    // Lire les valeurs envoyées par le Raspberry Pi
+    mode = Serial.parseInt();  // Lecture de mode
+    motorYawHMI = Serial.parseFloat() ;  // Lecture de yaw
+    motorPitchHMI = Serial.parseFloat()  ;  // Lecture de pitch
+    motorRollHMI = Serial.parseFloat()  ;  // Lecture de roll
+    float INUTIL = Serial.parseFloat();  // Lecture de inutilisé
   }
 }
 
-// Fonction d'initialisation du magnétomètre AK8963
-void initMagnetometer() {
-  Wire.beginTransmission(MPU_ADDR);
-  Wire.write(0x37); // Registre de configuration du magnétomètre
-  Wire.write(0x02); // Mode à 16 bits, à 100 Hz
-  Wire.endTransmission(true);
-}
 
 void setup() {
-  // Initialisation de la communication série et I2C
-  Serial.begin(115200);
   Wire.begin();
+  Serial.begin(9600);
+
+  byte status = mpu.begin();
+  Serial.print(F("MPU6050 status: "));
+  Serial.println(status);
+
+  while (status != 0) {
+    // stop everything if could not connect to MPU6050
+    delay(100);
+  }
+
+  Serial.println(F("Calculating offsets, do not move MPU6050"));
+  delay(1000);
+  mpu.calcOffsets(); // Gyro and accelerometer calibration
+  Serial.println("Done!\n");
+
+  Wire.begin();
+  Wire.beginTransmission(MPU);
+  Wire.write(0x6B);
+  Wire.write(0);
+  Wire.endTransmission(true);
+
+  // put your setup code here, to run once:
+  delay(2000);    // Délai additionnel pour avoir le temps de lire les messages sur la console.
+  DEBUG_SERIAL.println("Starting position control ...");
   
-  // Initialisation du MPU9250
-  initMPU9250();
+  // Use UART port of DYNAMIXEL Shield to debug.
+  DEBUG_SERIAL.begin(115200);
+  while(!DEBUG_SERIAL); // On attend que la communication série pour les messages soit prête.
 
-  // Initialisation du Magnétomètre
-  initMagnetometer();
-}
+  // Set Port baudrate to 57600bps. This has to match with DYNAMIXEL baudrate.
+  dxl.begin(57600);
+  if (dxl.getLastLibErrCode()) {
+    DEBUG_SERIAL.println("Could not init serial port!");
+    DEBUG_SERIAL.print("Last error code: ");
+    DEBUG_SERIAL.println(dxl.getLastLibErrCode());
+  }
+  // Set Port Protocol Version. This has to match with DYNAMIXEL protocol version.
+  if (!dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION)) {
+    DEBUG_SERIAL.println("Could not set protocol version!");
+    DEBUG_SERIAL.print("Last error code: ");
+    DEBUG_SERIAL.println(dxl.getLastLibErrCode());
+  }
+  // Get DYNAMIXEL information
+  bool ping = dxl.ping(DXL_ID1);
+  bool ping2 = dxl.ping(DXL_ID2);
+  bool ping3 = dxl.ping(DXL_ID3);
+  if (!ping || !ping2  || !ping3) {
+    DEBUG_SERIAL.println("Could not ping motor!");
+    DEBUG_SERIAL.print("Last error code: ");
+    DEBUG_SERIAL.println(dxl.getLastLibErrCode());
 
-// Fonction de lecture des données IMU (accéléromètre, gyroscope et magnétomètre)
-void readIMU3() {
-  // Lire les données de l'accéléromètre (6 octets)
-  Wire.beginTransmission(MPU_ADDR);
-  Wire.write(ACCEL_XOUT_H);
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU_ADDR, 6, true);
-  ax2 = (Wire.read() << 8) | Wire.read();
-  ay2 = (Wire.read() << 8) | Wire.read();
-  az2 = (Wire.read() << 8) | Wire.read();
+    return;
+  }
 
-  // Lire les données du gyroscope (6 octets)
-  Wire.beginTransmission(MPU_ADDR);
-  Wire.write(GYRO_XOUT_H);
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU_ADDR, 6, true);
-  gx = (Wire.read() << 8) | Wire.read();
-  gy = (Wire.read() << 8) | Wire.read();
-  gz = (Wire.read() << 8) | Wire.read();
+  // Turn off torque when configuring items in EEPROM area
+  dxl.torqueOff(DXL_ID1);
+  dxl.setOperatingMode(DXL_ID1, OP_POSITION);
+  dxl.torqueOn(DXL_ID1);
+  dxl.torqueOff(DXL_ID2);
+  dxl.setOperatingMode(DXL_ID2, OP_POSITION);
+  dxl.torqueOn(DXL_ID2);
+  dxl.torqueOff(DXL_ID3);
+  dxl.setOperatingMode(DXL_ID3, OP_POSITION);
+  dxl.torqueOn(DXL_ID3);
 
-  // Lire les données du magnétomètre (6 octets)
-  Wire.beginTransmission(MPU_ADDR);
-  Wire.write(MAGNETOMETER_XOUT_L);
-  Wire.endTransmission(false);
-  Wire.requestFrom(AK8963_ADDR, 6, true);
-  mx = (Wire.read() | (Wire.read() << 8));
-  my = (Wire.read() | (Wire.read() << 8));
-  mz = (Wire.read() | (Wire.read() << 8));
+
+  // Limit the maximum velocity in Position Control Mode. Use 0 for Max speed
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 30);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 30);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 30);
+
+  DEBUG_SERIAL.println("Super Setup done.");
+  DEBUG_SERIAL.print("Last error code: ");
+  DEBUG_SERIAL.println(dxl.getLastLibErrCode());
+  
+
+  dxl.setGoalPosition(DXL_ID1, ANGLE_0_DXL_ID1 + 0, UNIT_DEGREE);
+  dxl.setGoalPosition(DXL_ID2, ANGLE_0_DXL_ID2 + 0, UNIT_DEGREE);
+  dxl.setGoalPosition(DXL_ID3, ANGLE_0_DXL_ID3 + 0, UNIT_DEGREE);
+
+  pinMode(LED_BUILTIN, OUTPUT);  // LED intégrée sur D13
+  delay(2000);
+
+
 }
 
 void loop() {
-  // Lire les données du capteur IMU
-  readIMU3();
 
-  // Afficher les valeurs lues
-  Serial.print("Ax: "); Serial.print(ax2); Serial.print(" ");
-  Serial.print("Ay: "); Serial.print(ay2); Serial.print(" ");
-  Serial.print("Az: "); Serial.print(az2); Serial.print(" ");
-  Serial.print("Gx: "); Serial.print(gx); Serial.print(" ");
-  Serial.print("Gy: "); Serial.print(gy); Serial.print(" ");
-  Serial.print("Gz: "); Serial.print(gz); Serial.print(" ");
-  Serial.print("Mx: "); Serial.print(mx); Serial.print(" ");
-  Serial.print("My: "); Serial.print(my); Serial.print(" ");
-  Serial.print("Mz: "); Serial.println(mz);
-
-  delay(500);
-}
-
-*/
+  receiveModeAndAngleFromHMI();
+  sendAngleToHMI();
 
 
- 
+  if (mode == 1) // HMI controle position exacte
+  {
+    motorYaw = motorYawHMI;
+    motorPitch = motorPitchHMI;
+    motorRoll = motorRollHMI;
+    digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
+    delay(1000);
+    digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
+    
 
- 
+    sendNewPositionToMotors();
+  } 
+  else if (mode == 2) // IMU
+  {
+    mpu.update();  // Update sensor data
+    angle_yaw=mpu.getAngleZ();
+    angle_roll=mpu.getAngleX();
+    angle_pitch=mpu.getAngleY();
 
- 
-
- 
-
-
-
-
-/*
-#include <Wire.h>
-
-struct Quaternion {
-    float w, x, y, z;
-
-    // Produit quaternion x vecteur (approximation)
-    Quaternion operator*(const float v[3]) const {
-        return {
-            -x * v[0] - y * v[1] - z * v[2],
-             w * v[0] + y * v[2] - z * v[1],
-             w * v[1] + z * v[0] - x * v[2],
-             w * v[2] + x * v[1] - y * v[0]
-        };
-    }
-
-    // Addition de quaternions
-    Quaternion operator+(const Quaternion& q) const {
-        return {w + q.w, x + q.x, y + q.y, z + q.z};
-    }
-
-    // Normalisation du quaternion
-    void normalize() {
-        float norm = sqrt(w * w + x * x + y * y + z * z);
-        w /= norm; x /= norm; y /= norm; z /= norm;
-    }
-};
-
-// Quaternion d'orientation initiale (identité)
-Quaternion q = {1.0, 0.0, 0.0, 0.0};
-
-unsigned long previousTime = 0;
-const float GYRO_SENSITIVITY = 131.0;  // ±250°/s pour MPU6050
-
-void setup() {
-    Serial.begin(115200);
-    Wire.begin();
-    // Initialisation du gyroscope ici (ex: MPU6050)
-}
-
-void loop() {
-    unsigned long currentTime = micros();
-    float dt = (currentTime - previousTime) / 1e6; // Temps en secondes
-    previousTime = currentTime;
-
-    // Lire la vitesse angulaire depuis le gyroscope
-    float gyro[3] = {readGyroX() / GYRO_SENSITIVITY, 
-                     readGyroY() / GYRO_SENSITIVITY, 
-                     readGyroZ() / GYRO_SENSITIVITY};
-
-    // Calcul de dq = (1/2) * q * ω
-    Quaternion dq = q * gyro;
-    dq.w *= 0.5f * dt; dq.x *= 0.5f * dt; 
-    dq.y *= 0.5f * dt; dq.z *= 0.5f * dt;
-
-    // Mise à jour du quaternion : q_new = q_old + dq
-    q = q + dq;
-    q.normalize();  // Normalisation pour éviter la dérive
-
-    // Convertir quaternion en angles d'Euler
-    float roll  = atan2(2.0f * (q.w * q.x + q.y * q.z), 1.0f - 2.0f * (q.x * q.x + q.y * q.y)) * 180.0f / PI;
-    float pitch = asin(2.0f * (q.w * q.y - q.z * q.x)) * 180.0f / PI;
-    float yaw   = atan2(2.0f * (q.w * q.z + q.x * q.y), 1.0f - 2.0f * (q.y * q.y + q.z * q.z)) * 180.0f / PI;
-
-    // Affichage des angles
-    Serial.print("Roll: "); Serial.print(roll);
-    Serial.print(" | Pitch: "); Serial.print(pitch);
-    Serial.print(" | Yaw: "); Serial.println(yaw);
-
-    delay(10); // Petit délai pour stabiliser l'affichage
-}
-*/
+    updatemotorposition(angle_yaw, angle_pitch, angle_roll, 0,  0, 0);
+    sendNewPositionToMotors();
 
 
-/*
-struct Quaternion {
-  double w, x, y, z;
+  } 
+  else if (mode == 3) // YOLO
+  {
+    if (Serial.available() > 0) {
+      digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
+      delay(1000);
+      digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
+      // Lire les valeurs envoyées par le Raspberry Pi
+      float motorYaw = Serial.parseFloat();  // Lecture de yaw
+      float motorPitch = Serial.parseFloat();  // Lecture de pitch
 
-  // Normalisation du quaternion
-  void normalize() {
-      double norm = std::sqrt(w * w + x * x + y * y + z * z);
-      w /= norm;
-      x /= norm;
-      y /= norm;
-      z /= norm;
+      // Afficher les valeurs sur le moniteur série
+      //Serial.print("Yaw: ");
+      //Serial.print(motorYaw);
+      //Serial.print(" | Pitch: ");
+      //Serial.println(motorPitch);
+    
+      readAngle();
+
+      int desiredAngleMotor1 = qA + (0.2*motorYaw + 0.1*(motorYaw - oldMotorYaw));
+      int desiredAngleMotor2 = qB + (0.2*motorPitch + 0.1*(motorPitch - oldMotorPitch));
+      int desiredAngleMotor3 = ANGLE_0_DXL_ID1;
+
+      dxl.setGoalPosition(DXL_ID1, desiredAngleMotor1, UNIT_DEGREE);
+      dxl.setGoalPosition(DXL_ID2, desiredAngleMotor2, UNIT_DEGREE);
+      dxl.setGoalPosition(DXL_ID3, desiredAngleMotor3, UNIT_DEGREE);
+
+      oldMotorYaw = motorYaw;
+      oldMotorPitch = motorPitch;
+
+
+  }
+  else  if (mode == 4)// Possible jeu amusant
+  {
+    
+  }
+  else  if (mode == 5)// Retourne à HOME (0,0,0)
+  {
+    motorYaw = 0;
+    motorPitch = 0;
+    motorRoll = 0;
+    sendNewPositionToMotors();
+    digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
+    delay(1000);
+    digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
   }
 
-  // Produit quaternionique
-  Quaternion operator*(const Quaternion& q) const {
-      return {
-          w * q.w - x * q.x - y * q.y - z * q.z,
-          w * q.x + x * q.w + y * q.z - z * q.y,
-          w * q.y - x * q.z + y * q.w + z * q.x,
-          w * q.z + x * q.y - y * q.x + z * q.w
-      };
+  else
+  {
+    for (int i = 0; i < mode; i++) {
+      digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
+      delay(500);
+      digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
+      delay(500);
+    }
+
   }
 
-  // Mise à jour avec les données du gyroscope
-  void update(double wx, double wy, double wz, double dt) {
-      Quaternion omega_q = {0, wx, wy, wz};  // Quaternion vitesse angulaire
-      Quaternion q_dot = (*this) * omega_q * 0.5;  // dq/dt = 1/2 * q * omega_q
-
-      // Intégration discrète : q_new = q_old + q_dot * dt
-      w += q_dot.w * dt;
-      x += q_dot.x * dt;
-      y += q_dot.y * dt;
-      z += q_dot.z * dt;
-
-      normalize();  // Normalisation pour éviter les dérives
-  }
-};
-
-int main() {
-  Quaternion q = {1, 0, 0, 0};  // Orientation initiale
-  double wx = 0.1, wy = 0.2, wz = 0.3;  // Vitesses angulaires en rad/s
-  double dt = 0.01;  // Intervalle de temps (10 ms)
-
-  q.update(wx, wy, wz, dt);  // Mise à jour du quaternion
-
-  std::cout << "Nouvelle orientation : (" << q.w << ", " << q.x << ", " << q.y << ", " << q.z << ")\n";
-  return 0;
 }
-  */
+  
+}
+  
+  
 
