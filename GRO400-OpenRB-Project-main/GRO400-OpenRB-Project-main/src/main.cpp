@@ -1,9 +1,5 @@
 
-// GRO400 - Exemple d'utilisation du OpenRB avec un moteur Dynamixel sous Platform.IO.
-// Basé sur l'exemple de Position Control.
-// Opère un moteur (à définir par la variable DXL_ID - 1 par défaut) en position en le faisant passer
-// d'une position en pulsations (1000) à une autre en degrés (5.7) et vice-versa à chaque
-// seconde.
+
 // Écrit la position en cours en pulsations à la console série (accessible par DEBUG_SERIAL).
 // N'oubliez-pas de configurer votre port série pour cette console à 115200 bauds.
 
@@ -59,7 +55,7 @@ const uint8_t DXL_ID1 = 20;
 const uint8_t DXL_ID2 = 15;
 const uint8_t DXL_ID3 = 40; 
 
-const uint8_t ANGLE_0_DXL_ID1 = 171; //a verif
+const uint8_t ANGLE_0_DXL_ID1 = 167; //a verif
 const uint8_t ANGLE_0_DXL_ID2 = 188; //a verif
 const uint8_t ANGLE_0_DXL_ID3 = 180; //a verif
 
@@ -141,11 +137,6 @@ float previousGyroZ = 0;
 float previousGyroX = 0;
 float previousGyroY = 0;
  
-// Kalman filter variables
-float Q_angle = 0.001f;   // Process noise covariance for the angle
-float Q_gyro = 0.003f;    // Process noise covariance for the gyro rate
-float R_angle = 0.03f;    // Measurement noise covariance for the angle
- 
 float angle_pitch = 0.0f;
 float angle_roll = 0.0f;
 float angle_yaw = 0.0f;
@@ -154,14 +145,8 @@ float gyroY_rate = 0.0f;
 float gyroZ_rate = 0.0f;
 float angleX, angleY, angleZ;
 float biasX = 0.0f, biasY = 0.0f, biasZ = 0.0f;
- 
-// Kalman filter states (flattened covariance matrix)
-float P_pitch[4] = {1, 0, 0, 1};  // Flattened Covariance matrix for pitch
-float P_roll[4] = {1, 0, 0, 1};   // Flattened Covariance matrix for roll
-float P_yaw[4] = {1, 0, 0, 1};    // Flattened Covariance matrix for yaw
 
 // ------------------------------------------------------------------- quaternion --------------------------------------------------------------
-// quaternion 1
 
  // Définition d'une structure pour les quaternions
 struct Quaternion1 {
@@ -219,7 +204,6 @@ Quaternion1 eulerToQuaternion(float yaw, float pitch, float roll) {
 // Angles de référence du gimbal
 Quaternion1 gimbalReference = {1, 0, 0, 0};
    
-
 void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC, float qB ) {
     // Convertir en quaternion
     Quaternion1 q_g = eulerToQuaternion(yaw, pitch, roll);
@@ -237,60 +221,11 @@ void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC,
     float yawComp, pitchComp, rollComp;
     q_corr.toEuler(yawComp, pitchComp, rollComp);
 
-    // Mise à jour des positions moteur
-    //lastYaw = yawComp;
-    //lastPitch = pitchComp;
-    //lastRoll = rollComp;
-
-    Serial.println("yawComp: ");
-    Serial.println(yawComp);
-    Serial.println("pitchComp: ");
-    Serial.println(pitchComp);
-    Serial.println("rollComp: ");
-    Serial.println(rollComp);
-
-
     // Convertir en position moteur (0 à 360°)
     motorYaw = int(fmod((yawComp + qA ), 360));
     motorPitch = int(fmod((pitchComp + qC ), 360));
     motorRoll = int(fmod((rollComp + qB ), 360));
-
 }
-
-
-
-
-// ---------------------------------------------------------------  Kalman filter functions ------------------------------------------------------
-void updateKalmanFilter(float *angle, float *bias, float *P, float newAngle, float newRate, float dt) {
-  // Predict step
-  *angle += dt * (newRate - *bias);
-  P[0] += dt * (dt * P[3] - P[1] - P[2] + Q_angle);  // P[0][0]
-  P[1] -= dt * P[3];  // P[0][1] = P[1][0]
-  P[2] -= dt * P[3];  // P[1][0] = P[0][1]
-  P[3] += Q_gyro * dt; // P[1][1] = P[3][3]
- 
-  // Measurement update step (using accelerometer or magnetometer)
-  float S = P[0] + R_angle;
-  float K[2];  // Kalman gain
-  K[0] = P[0] / S;
-  K[1] = P[2] / S;
- 
-  float y = newAngle - *angle;
-  *angle += K[0] * y;
-  *bias += K[1] * y;
- 
-  // Update covariance
-  float P00_temp = P[0];
-  float P01_temp = P[1];
- 
-  P[0] -= K[0] * P00_temp;
-  P[1] -= K[0] * P01_temp;
-  P[2] -= K[1] * P00_temp;
-  P[3] -= K[1] * P01_temp;
-}
-
-
-
 
 float DegToRad(float angle) {
   angle = ((angle) * M_PI / 180.0);
@@ -303,106 +238,18 @@ float RadToDeg(float angle) {
 }
 
 float sinDeg(float angle) {
-    return sin(DegToRad(angle)); // Convertit en radians et applique sin()
+  return sin(DegToRad(angle)); // Convertit en radians et applique sin()
 }
 float cosDeg(float angle) {
-    return cos(DegToRad(angle)); // Convertit en radians et applique cos()
+  return cos(DegToRad(angle)); // Convertit en radians et applique cos()
 }
-
-// matrice
-void afficherMatrice(float matrice33[3][3]){
-  for (int i = 0; i < 3; i++) {  
-      for (int j = 0; j < 3; j++) {  
-          Serial.print(matrice33[i][j]);
-          Serial.print(" ");
-      }
-      Serial.println();  
-  }
-}
-
-void multiplierMatrices() {
-  //Lecture angle des moteurs
-  qA = dxl.getPresentPosition(DXL_ID1, UNIT_DEGREE) - ANGLE_0_DXL_ID1;
-  qB = dxl.getPresentPosition(DXL_ID2, UNIT_DEGREE) - ANGLE_0_DXL_ID2;
-  qC = dxl.getPresentPosition(DXL_ID3, UNIT_DEGREE)- ANGLE_0_DXL_ID3;
-  Serial.println(qA);
-  Serial.println(qB);
-  Serial.println(qC);
-  
-  theta_x = angle_pitch;
-  theta_y = angle_roll; 
-  theta_z = angle_yaw;
-  
-  
-  float MatriceMoteurs[3][3] = {
-    {(cosDeg(qC) * cosDeg(qA) - sinDeg(qC) * sinDeg(qB) * sinDeg(qA)), 
-     (cosDeg(qC) * sinDeg(qA) + sinDeg(qC) * sinDeg(qB) * cosDeg(qA)), 
-     (-sinDeg(qC) * cosDeg(qB))},
-  
-    {(-cosDeg(qB) * sinDeg(qA)), 
-     (cosDeg(qB) * cosDeg(qA)), 
-     (sinDeg(qB))},
-  
-    {(sinDeg(qC) * cosDeg(qA) + cosDeg(qC) * sinDeg(qB) * sinDeg(qA)), 
-     (sinDeg(qC) * sinDeg(qA) - cosDeg(qC) * sinDeg(qB) * cosDeg(qA)), 
-     (cosDeg(qC) * cosDeg(qB))}
-  };
-  
-  float MatriceAccelero[3][3] = {
-    {(cosDeg(theta_y) * cosDeg(theta_z) - sinDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z)), 
-     (-cosDeg(theta_x) * sinDeg(theta_z)), 
-     (sinDeg(theta_y) * cosDeg(theta_z) + cosDeg(theta_y) * sinDeg(theta_x) * sinDeg(theta_z))},
-  
-    {(cosDeg(theta_y) * sinDeg(theta_z) + sinDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z)), 
-     (cosDeg(theta_x) * cosDeg(theta_z)), 
-     (sinDeg(theta_y) * sinDeg(theta_z) - cosDeg(theta_y) * sinDeg(theta_x) * cosDeg(theta_z))},
-  
-    {(-sinDeg(theta_y) * cosDeg(theta_x)), 
-     (sinDeg(theta_x)), 
-     (cosDeg(theta_y) * cosDeg(theta_x))}
-  };
-  
-  float MatriceGimbal[3][3] = {
-    {0.0, 0.0, 0.0}, 
-    {0.0, 0.0, 0.0}, 
-    {0.0, 0.0, 0.0}
-  };
-  
-  
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
-            MatriceGimbal[i][j] = 0;
-            for (int k = 0; k < 3; k++) {
-                MatriceGimbal[i][j] += MatriceMoteurs[i][k] * MatriceAccelero[k][j];
-            }
-        }
-    }
-  afficherMatrice(MatriceMoteurs);
-  
-  
-    modMoteur3 = atan2(-MatriceGimbal[2][0], sqrt(pow(MatriceGimbal[0][0], 2) + pow(MatriceGimbal[1][0], 2)));
-    modMoteur2 = atan2(MatriceGimbal[2][1], MatriceGimbal[2][2]);
-    modMoteur1 = atan2(MatriceGimbal[1][0], MatriceGimbal[0][0]);
-  
-  // Conversion en degrés
-    modMoteur1 *= 180.0 / M_PI;
-    modMoteur2 *= 180.0 / M_PI;
-    modMoteur3 *= 180.0 / M_PI;
-  
-  Serial.println(modMoteur1);
-  Serial.println(modMoteur2);
-  Serial.println(modMoteur3);
-  }
 
 void readAngle() {
-  //Lecture angle des moteurs
+  //Read angle on each motor
   qA = dxl.getPresentPosition(DXL_ID1, UNIT_DEGREE);
   qB = dxl.getPresentPosition(DXL_ID2, UNIT_DEGREE);
   qC = dxl.getPresentPosition(DXL_ID3, UNIT_DEGREE);
-
 }
-
-
 
 void sendNewPositionToMotors()
 {
@@ -411,56 +258,44 @@ void sendNewPositionToMotors()
   float Motor3GoToPosition = ANGLE_0_DXL_ID3 + motorPitch;
 
   //Verification que les angles restent entre 0 et 360 car les moteurs couvrent seulement entre ces 2 bornes
-  if (Motor1GoToPosition > 360)
-  {
+  if (Motor1GoToPosition > 360) {
     Motor1GoToPosition = 360;
   }
 
-  if (Motor1GoToPosition < 0)
-  {
+  if (Motor1GoToPosition < 0){
     Motor1GoToPosition = 0;
   }
 
-  if (Motor2GoToPosition > 180+70)
-  {
+  if (Motor2GoToPosition > 180+70) {
     Motor2GoToPosition = 180+70;
   }
 
-  if (Motor2GoToPosition < 0)
-  {
+  if (Motor2GoToPosition < 0) {
     Motor2GoToPosition = 0;
   }
 
-  if (Motor3GoToPosition > 360)
-  {
+  if (Motor3GoToPosition > 360) {
     Motor3GoToPosition = 360;
   }
 
-  if (Motor3GoToPosition < 0)
-  {
+  if (Motor3GoToPosition < 0) {
     Motor3GoToPosition = 0;
   }
 
-  if (fabs((Motor1GoToPosition) -  lastAngle1) >= seuil )  
-  {
+  if (fabs((Motor1GoToPosition) -  lastAngle1) >= seuil )  {
     dxl.setGoalPosition(DXL_ID1, Motor1GoToPosition, UNIT_DEGREE);
     lastAngle1 = Motor1GoToPosition;
   }
   
-  if (fabs((Motor2GoToPosition) -  lastAngle2) >= seuil  )  
-  {
+  if (fabs((Motor2GoToPosition) -  lastAngle2) >= seuil  )  {
     dxl.setGoalPosition(DXL_ID2, Motor2GoToPosition, UNIT_DEGREE);
     lastAngle2 = Motor2GoToPosition;
   }
 
-  if (fabs((Motor3GoToPosition) -  lastAngle3) >= seuil )  
-  {
+  if (fabs((Motor3GoToPosition) -  lastAngle3) >= seuil )  {
     dxl.setGoalPosition(DXL_ID3, Motor3GoToPosition, UNIT_DEGREE);
     lastAngle3 = Motor3GoToPosition;
   }
-   
-  //delay(50);
-
 }
 
 void sendAngleToHMI(){
@@ -483,10 +318,9 @@ void receiveModeAndAngleFromHMI(){
   }
 }
 
-
 void setup() {
   Wire.begin();
-  Serial.begin(9600);
+  Serial.begin(115200); //9600
 
   byte status = mpu.begin();
   Serial.print(F("MPU6050 status: "));
@@ -552,16 +386,14 @@ void setup() {
   dxl.setOperatingMode(DXL_ID3, OP_POSITION);
   dxl.torqueOn(DXL_ID3);
 
-
   // Limit the maximum velocity in Position Control Mode. Use 0 for Max speed
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 30);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 30);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 30);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 70);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 70);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 70);
 
   DEBUG_SERIAL.println("Super Setup done.");
   DEBUG_SERIAL.print("Last error code: ");
   DEBUG_SERIAL.println(dxl.getLastLibErrCode());
-  
 
   dxl.setGoalPosition(DXL_ID1, ANGLE_0_DXL_ID1 + 0, UNIT_DEGREE);
   dxl.setGoalPosition(DXL_ID2, ANGLE_0_DXL_ID2 + 0, UNIT_DEGREE);
@@ -569,8 +401,6 @@ void setup() {
 
   pinMode(LED_BUILTIN, OUTPUT);  // LED intégrée sur D13
   delay(2000);
-
-
 }
 
 void loop() {
@@ -578,91 +408,75 @@ void loop() {
   receiveModeAndAngleFromHMI();
   sendAngleToHMI();
 
+  switch (mode) {
+    case 1: //HMI control
+        motorYaw = motorYawHMI;
+        motorPitch = motorPitchHMI;
+        motorRoll = motorRollHMI;
+        digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
+        delay(1000);
+        digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
+      
+        sendNewPositionToMotors();
+        break;
+    case 2: //IMU
+        mpu.update();  // Update sensor data
+        angle_yaw=mpu.getAngleZ();
+        angle_roll=mpu.getAngleX();
+        angle_pitch=mpu.getAngleY();
 
-  if (mode == 1) // HMI controle position exacte
-  {
-    motorYaw = motorYawHMI;
-    motorPitch = motorPitchHMI;
-    motorRoll = motorRollHMI;
-    digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
-    delay(1000);
-    digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
-    
+        updatemotorposition(angle_yaw, angle_pitch, angle_roll, 0,  0, 0);
+        sendNewPositionToMotors();
+        break;
+    case 3: // Object detection
+        if (Serial.available() > 0) {
+          digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
+          delay(1000);
+          digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
+          // Lire les valeurs envoyées par le Raspberry Pi
+          float motorYaw = Serial.parseFloat();  // Lecture de yaw
+          float motorPitch = Serial.parseFloat();  // Lecture de pitch
 
-    sendNewPositionToMotors();
-  } 
-  else if (mode == 2) // IMU
-  {
-    mpu.update();  // Update sensor data
-    angle_yaw=mpu.getAngleZ();
-    angle_roll=mpu.getAngleX();
-    angle_pitch=mpu.getAngleY();
+          // Afficher les valeurs sur le moniteur série
+          //Serial.print("Yaw: ");
+          //Serial.print(motorYaw);
+          //Serial.print(" | Pitch: ");
+          //Serial.println(motorPitch);
+        
+          readAngle();
 
-    updatemotorposition(angle_yaw, angle_pitch, angle_roll, 0,  0, 0);
-    sendNewPositionToMotors();
+          int desiredAngleMotor1 = qA + (0.2*motorYaw + 0.1*(motorYaw - oldMotorYaw));
+          int desiredAngleMotor2 = qB + (0.2*motorPitch + 0.1*(motorPitch - oldMotorPitch));
+          int desiredAngleMotor3 = ANGLE_0_DXL_ID1;
 
+          dxl.setGoalPosition(DXL_ID1, desiredAngleMotor1, UNIT_DEGREE);
+          dxl.setGoalPosition(DXL_ID2, desiredAngleMotor2, UNIT_DEGREE);
+          dxl.setGoalPosition(DXL_ID3, desiredAngleMotor3, UNIT_DEGREE);
 
-  } 
-  else if (mode == 3) // YOLO
-  {
-    if (Serial.available() > 0) {
-      digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
-      delay(1000);
-      digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
-      // Lire les valeurs envoyées par le Raspberry Pi
-      float motorYaw = Serial.parseFloat();  // Lecture de yaw
-      float motorPitch = Serial.parseFloat();  // Lecture de pitch
-
-      // Afficher les valeurs sur le moniteur série
-      //Serial.print("Yaw: ");
-      //Serial.print(motorYaw);
-      //Serial.print(" | Pitch: ");
-      //Serial.println(motorPitch);
-    
-      readAngle();
-
-      int desiredAngleMotor1 = qA + (0.2*motorYaw + 0.1*(motorYaw - oldMotorYaw));
-      int desiredAngleMotor2 = qB + (0.2*motorPitch + 0.1*(motorPitch - oldMotorPitch));
-      int desiredAngleMotor3 = ANGLE_0_DXL_ID1;
-
-      dxl.setGoalPosition(DXL_ID1, desiredAngleMotor1, UNIT_DEGREE);
-      dxl.setGoalPosition(DXL_ID2, desiredAngleMotor2, UNIT_DEGREE);
-      dxl.setGoalPosition(DXL_ID3, desiredAngleMotor3, UNIT_DEGREE);
-
-      oldMotorYaw = motorYaw;
-      oldMotorPitch = motorPitch;
-
-
-  }
-  else  if (mode == 4)// Possible jeu amusant
-  {
-    
-  }
-  else  if (mode == 5)// Retourne à HOME (0,0,0)
-  {
-    motorYaw = 0;
-    motorPitch = 0;
-    motorRoll = 0;
-    sendNewPositionToMotors();
-    digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
-    delay(1000);
-    digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
-  }
-
-  else
-  {
-    for (int i = 0; i < mode; i++) {
-      digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
-      delay(500);
-      digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
-      delay(500);
-    }
-
-  }
+          oldMotorYaw = motorYaw;
+          oldMotorPitch = motorPitch;
+        }
+        break;
+    case 4: // Possible jeu amusant
+        printf("Gros fun\n");
+        break;
+    case 5: //Back to home (0,0,0)
+        motorYaw = 0;
+        motorPitch = 0;
+        motorRoll = 0;
+        sendNewPositionToMotors();
+        digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
+        delay(1000);
+        digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
+        break;
+    default:
+        printf("PLEASE SELECT A MODE\n");
+        break;
+}
 
 }
   
-}
+
   
   
 
