@@ -141,80 +141,83 @@ float biasX = 0.0f, biasY = 0.0f, biasZ = 0.0f;
 
 // ------------------------------------------------------------------- quaternion --------------------------------------------------------------
 
- // Définition d'une structure pour les quaternions
+// Definition of a structure for quaternions
 struct Quaternion1 {
-    float w, x, y, z;
+  float w, x, y, z;
 
-    // Multiplication de quaternions
-    Quaternion1 operator*(const Quaternion1& q) const {
-        return {
-            w * q.w - x * q.x - y * q.y - z * q.z,
-            w * q.x + x * q.w + y * q.z - z * q.y,
-            w * q.y - x * q.z + y * q.w + z * q.x,
-            w * q.z + x * q.y - y * q.x + z * q.w
-        };
-    }
-    // Inverse d'un quaternion unitaire (q⁻¹ = conj(q) car |q| = 1)
-    Quaternion1 inverse() const {
-        return {w, -x, -y, -z};
-    }
+  // Multiplication of quaternions
+  Quaternion1 operator*(const Quaternion1& q) const {
+      return {
+          w * q.w - x * q.x - y * q.y - z * q.z,
+          w * q.x + x * q.w + y * q.z - z * q.y,
+          w * q.y - x * q.z + y * q.w + z * q.x,
+          w * q.z + x * q.y - y * q.x + z * q.w
+      };
+  }
 
-    // Conversion en angles d'Euler
-    void toEuler(float &yaw, float &pitch, float &roll) const {
-        yaw = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z)) * 180.0 / PI;
-        pitch = asin(2.0 * (w * y - z * x)) * 180.0 / PI;
-        roll = atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)) * 180.0 / PI;
-    }
+  // Inverse of a unit quaternion (q⁻¹ = conj(q) since |q| = 1)
+  Quaternion1 inverse() const {
+      return {w, -x, -y, -z};
+  }
 
-    void normalize() {
-        float norm = sqrt(w * w + x * x + y * y + z * z);
-        if (norm > 1e-6) { // Éviter la division par zéro
-            w /= norm;
-            x /= norm;
-            y /= norm;
-            z /= norm;
-        }
-    }
+  // Conversion to Euler angles
+  void toEuler(float &yaw, float &pitch, float &roll) const {
+      yaw = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z)) * 180.0 / PI;
+      pitch = asin(2.0 * (w * y - z * x)) * 180.0 / PI;
+      roll = atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)) * 180.0 / PI;
+  }
+
+  // Normalize the quaternion
+  void normalize() {
+      float norm = sqrt(w * w + x * x + y * y + z * z);
+      if (norm > 1e-6) { // Avoid division by zero
+          w /= norm;
+          x /= norm;
+          y /= norm;
+          z /= norm;
+      }
+  }
 };
-//--------------------------------------------------------------- fonction  eulerToQuaternion 
-// Fonction pour convertir des angles d'Euler en quaternion
-Quaternion1 eulerToQuaternion(float yaw, float pitch, float roll) {
-    float cy = cos(yaw * PI / 180 /2);
-    float sy = sin(yaw * PI / 180 /2);
-    float cp = cos(pitch * PI / 180 /2);
-    float sp = sin(pitch * PI / 180 /2);
-    float cr = cos(roll * PI / 180 /2);
-    float sr = sin(roll * PI / 180 /2);
+//--------------------------------------------------------------- function eulerToQuaternion 
 
-    return {
-        cy * cp * cr + sy * sp * sr, // w
-        cy * cp * sr - sy * sp * cr, // x
-        sy * cp * sr + cy * sp * cr, // y
-        sy * cp * cr - cy * sp * sr  // z
-    };
+// Function to convert Euler angles to quaternion
+Quaternion1 eulerToQuaternion(float yaw, float pitch, float roll) {
+  float cy = cos(yaw * PI / 180 /2);
+  float sy = sin(yaw * PI / 180 /2);
+  float cp = cos(pitch * PI / 180 /2);
+  float sp = sin(pitch * PI / 180 /2);
+  float cr = cos(roll * PI / 180 /2);
+  float sr = sin(roll * PI / 180 /2);
+
+  return {
+      cy * cp * cr + sy * sp * sr, // w
+      cy * cp * sr - sy * sp * cr, // x
+      sy * cp * sr + cy * sp * cr, // y
+      sy * cp * cr - cy * sp * sr  // z
+  };
 }
-// --------------------------------------------------------------------- initiation pour quaternion 
-// Angles de référence du gimbal
+// --------------------------------------------------------------------- // Initialize quaternion
+// Gimbal reference angles
 Quaternion1 gimbalReference = {1, 0, 0, 0};
    
 void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC, float qB ) {
-    // Convertir en quaternion
+    // Convert to quaternion
     Quaternion1 q_g = eulerToQuaternion(yaw, pitch, roll);
 
-    // Utiliser la dernière position moteur comme référence
+    // Use the last motor position as a reference
     Quaternion1 gimbalReference = eulerToQuaternion(qA, qC, qB);
     
-    // Calculer la compensation : q_corr = q_g^-1 * q_ref
+    // Calculate compensation: q_corr = q_g^-1 * q_ref
     Quaternion1 q_corr =  gimbalReference * q_g.inverse();
 
-    // normalise
+    // Normalize
     q_corr.normalize();
 
-    // Extraire les angles de correction
+    // Extract correction angles
     float yawComp, pitchComp, rollComp;
     q_corr.toEuler(yawComp, pitchComp, rollComp);
 
-    // Convertir en position moteur (0 à 360°)
+    // Convert to motor position (0 to 360°)
     motorYaw = int(fmod((yawComp + qA ), 360));
     motorPitch = -int(fmod((pitchComp + qC ), 360));
     motorRoll = int(fmod((rollComp + qB ), 360));
@@ -222,19 +225,20 @@ void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC,
 
 float DegToRad(float angle) {
   angle = ((angle) * M_PI / 180.0);
-  return angle; // Convertit les degrés en radians
+  return angle; // Converts degrees to radians
 }
 
 float RadToDeg(float angle) {
   angle = ((angle) * 180 / M_PI);
-  return angle; // Convertit les degrés en radians
+  return angle; // Converts radians to degrees
 }
 
 float sinDeg(float angle) {
-  return sin(DegToRad(angle)); // Convertit en radians et applique sin()
+  return sin(DegToRad(angle)); // Converts to radians and applies sin()
 }
+
 float cosDeg(float angle) {
-  return cos(DegToRad(angle)); // Convertit en radians et applique cos()
+  return cos(DegToRad(angle)); // Converts to radians and applies cos()
 }
 
 void readAngle() {
@@ -250,7 +254,7 @@ void sendNewPositionToMotors()
   float Motor2GoToPosition = ANGLE_0_DXL_ID2  + motorRoll;
   float Motor3GoToPosition = ANGLE_0_DXL_ID3 + motorPitch;
 
-  //Verification que les angles restent entre 0 et 360 car les moteurs couvrent seulement entre ces 2 bornes
+  // Verification that the angles remain between 0 and 360 because the motors only cover these two limits
   if (Motor1GoToPosition > 360) {
     Motor1GoToPosition = 360;
   }
@@ -433,9 +437,9 @@ void loop() {
         break;
     case 3: // Object detection
         if (Serial.available() > 0) {
-          // Lire les valeurs envoyées par le Raspberry Pi
-          float motorYaw = Serial.parseFloat();  // Lecture de yaw
-          float motorPitch = Serial.parseFloat();  // Lecture de pitch
+          // Read the values sent by the Raspberry Pi
+          float motorYaw = Serial.parseFloat(); 
+          float motorPitch = Serial.parseFloat();  
 
           // Afficher les valeurs sur le moniteur série
           //Serial.print("Yaw: ");
@@ -457,7 +461,7 @@ void loop() {
           oldMotorPitch = motorPitch;
         }
         break;
-    case 4: // Possible jeu amusant
+    case 4: 
         printf("Gros fun\n");
         break;
     case 5: //Back to home (0,0,0)
@@ -470,7 +474,6 @@ void loop() {
         printf("PLEASE SELECT A MODE\n");
         break;
     }
-
 }
 
   
