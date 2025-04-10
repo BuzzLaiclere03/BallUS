@@ -106,9 +106,12 @@ int motorRoll = 0;
 int oldMotorYaw = 0;
 int oldMotorPitch = 0;
 
-int motorYawHMI = 0;
-int motorPitchHMI = 0;
-int motorRollHMI =0;
+float motorYawHMI = 0;
+float motorPitchHMI = 0;
+float motorRollHMI =0;
+
+float motorYawYolo = 0;
+float motorPitchYolo = 0;
 
 #define LED_PIN 6  // Choisir un pin numérique
 
@@ -324,6 +327,12 @@ void receiveModeAndAngleFromHMI(){
 
     motorPitchHMI = ligne.substring(0, ligne.indexOf(',')).toFloat();  // Extract pitch (next part) and convert it to a float
     ligne.remove(0, ligne.indexOf(',') + 1);  // Remove the pitch value and the comma
+    
+    motorYawYolo = ligne.substring(0, ligne.indexOf(',')).toFloat();  // Extract pitch (next part) and convert it to a float
+    ligne.remove(0, ligne.indexOf(',') + 1);  // Remove the pitch value and the comma
+
+    motorPitchYolo = ligne.substring(0, ligne.indexOf(',')).toFloat();  // Extract pitch (next part) and convert it to a float
+    ligne.remove(0, ligne.indexOf(',') + 1);  // Remove the pitch value and the comma
 
     // Extract the unused value (it will be at the end after all the commas) and convert it to float
     float INUTIL = ligne.toFloat(); 
@@ -414,68 +423,78 @@ void setup() {
 }
 
 void loop() {
- 
+
   receiveModeAndAngleFromHMI();
   sendAngleToHMI();
 
   switch (mode) {
-    case 1: //HMI control
+    case 1: // HMI control
         motorYaw = motorYawHMI;
         motorPitch = motorPitchHMI;
         motorRoll = motorRollHMI;
       
         sendNewPositionToMotors();
         break;
-    case 2: //IMU
-        mpu.update();  // Update sensor data
-        angle_yaw=mpu.getAngleZ();
-        angle_roll= mpu.getAngleX();
-        angle_pitch=mpu.getAngleY();
 
-        updatemotorposition(angle_yaw, angle_pitch, angle_roll, 0,  0, 0);
+    case 2: // IMU
+        mpu.update();  // Update sensor data
+        angle_yaw = mpu.getAngleZ();
+        angle_roll = mpu.getAngleX();
+        angle_pitch = mpu.getAngleY();
+
+        updatemotorposition(angle_yaw, angle_pitch, angle_roll, 0, 0, 0);
         sendNewPositionToMotors();
         break;
-    case 3: // Object detection
-        if (Serial.available() > 0) {
-          // Read the values sent by the Raspberry Pi
-          float motorYaw = Serial.parseFloat(); 
-          float motorPitch = Serial.parseFloat();  
 
-          // Afficher les valeurs sur le moniteur série
-          //Serial.print("Yaw: ");
-          //Serial.print(motorYaw);
-          //Serial.print(" | Pitch: ");
-          //Serial.println(motorPitch);
-        
-          readAngle();
+    case 3: { // Object detection
+        readAngle();
 
-          int desiredAngleMotor1 = qA + (0.2*motorYaw + 0.1*(motorYaw - oldMotorYaw));
-          int desiredAngleMotor2 = qB + (0.2*motorPitch + 0.1*(motorPitch - oldMotorPitch));
-          int desiredAngleMotor3 = ANGLE_0_DXL_ID1;
+        /*int desiredAngleMotor1 = qA + (0.2 * motorYawYolo + 0.1 * (motorYawYolo - oldMotorYaw));
+        int desiredAngleMotor2 = qB + (0.2 * motorPitchYolo + 0.1 * (motorPitchYolo - oldMotorPitch));
+        //int desiredAngleMotor3 = ANGLE_0_DXL_ID1;
 
-          dxl.setGoalPosition(DXL_ID1, desiredAngleMotor1, UNIT_DEGREE);
-          dxl.setGoalPosition(DXL_ID2, desiredAngleMotor2, UNIT_DEGREE);
-          dxl.setGoalPosition(DXL_ID3, desiredAngleMotor3, UNIT_DEGREE);
+        dxl.setGoalPosition(DXL_ID1, desiredAngleMotor1, UNIT_DEGREE);
+        dxl.setGoalPosition(DXL_ID2, desiredAngleMotor2, UNIT_DEGREE);
+        //dxl.setGoalPosition(DXL_ID3, desiredAngleMotor3, UNIT_DEGREE);
 
-          oldMotorYaw = motorYaw;
-          oldMotorPitch = motorPitch;
-        }
+        oldMotorYaw = motorYaw;
+        oldMotorPitch = motorPitch;*/
+
+        // Facteur de lissage alpha entre 0 et 1. Plus il est proche de 1, plus la valeur est réactive
+        const float alpha = 0.2f;  // Ajustable selon le niveau de réactivité souhaité
+
+        // Moyenne mobile exponentielle (EMA)
+        float smoothedMotorYawYolo = alpha * motorYawYolo + (1 - alpha) * smoothedMotorYawYolo;
+        float smoothedMotorPitchYolo = alpha * motorPitchYolo + (1 - alpha) * smoothedMotorPitchYolo;
+
+        int desiredAngleMotor1 = qA + smoothedMotorYawYolo;
+        int desiredAngleMotor2 = qB + smoothedMotorPitchYolo;
+
+        dxl.setGoalPosition(DXL_ID1, desiredAngleMotor1, UNIT_DEGREE);
+        dxl.setGoalPosition(DXL_ID2, desiredAngleMotor2, UNIT_DEGREE);
+
+        // Mise à jour de l’ancien état
+        oldMotorYaw = motorYaw;
+        oldMotorPitch = motorPitch;
         break;
-    case 4: 
+    }
+
+    case 4:
         printf("Gros fun\n");
         break;
-    case 5: //Back to home (0,0,0)
+
+    case 5: // Back to home (0,0,0)
         motorYaw = 0;
         motorPitch = 0;
         motorRoll = 0;
         sendNewPositionToMotors();
         break;
+
     default:
         printf("PLEASE SELECT A MODE\n");
         break;
-    }
+  }
 }
-
   
 
   
