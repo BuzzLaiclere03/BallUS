@@ -1,17 +1,9 @@
-
-
-// Écrit la position en cours en pulsations à la console série (accessible par DEBUG_SERIAL).
-// N'oubliez-pas de configurer votre port série pour cette console à 115200 bauds.
-
+// Created by Ballus on 2024-04-10.
 #include <Dynamixel2Arduino.h>
 #include <math.h>
 #include <Wire.h>
 #include <cmath>
-//#include "I2Cdev.h"
-//#include "MPU6050.h"
-
 #include <MPU6050_light.h>
-//#include "MPU9250.h" 
 
 // Please modify it to suit your hardware.
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560) // When using DynamixelShield
@@ -95,11 +87,12 @@ float lastAngle1 = 0;
 float lastAngle2 = 0;
 float lastAngle3 = 0;
 
-int seuil = 1; //degree
+int seuil = 0; //degree
 
 // initiation pour IMU
 MPU6050 mpu(Wire);
 unsigned long timer = 0;
+unsigned long timer2 = 0;
 
 // initiation de la mémoire des angle 
 float last_Yaw=0;
@@ -223,7 +216,7 @@ void updatemotorposition(float yaw, float pitch, float roll, float qA, float qC,
 
     // Convertir en position moteur (0 à 360°)
     motorYaw = int(fmod((yawComp + qA ), 360));
-    motorPitch = int(fmod((pitchComp + qC ), 360));
+    motorPitch = -int(fmod((pitchComp + qC ), 360));
     motorRoll = int(fmod((rollComp + qB ), 360));
 }
 
@@ -308,19 +301,34 @@ void sendAngleToHMI(){
 }
 
 void receiveModeAndAngleFromHMI(){
-  if (Serial.available() > 0) {
-    // Lire les valeurs envoyées par le Raspberry Pi
-    mode = Serial.parseInt();  // Lecture de mode
-    motorYawHMI = Serial.parseFloat() ;  // Lecture de yaw
-    motorPitchHMI = Serial.parseFloat()  ;  // Lecture de pitch
-    motorRollHMI = Serial.parseFloat()  ;  // Lecture de roll
-    float INUTIL = Serial.parseFloat();  // Lecture de inutilisé
-  }
+  if (Serial.available()) {
+    String ligne = Serial.readStringUntil('\n');  // Read the full line until newline character
+    ligne.trim();  // Remove any leading or trailing spaces
+    
+    // We split the line by commas
+    int modeIndex = ligne.indexOf(',');  // Find the index of the first comma
+    mode = ligne.substring(0, modeIndex).toInt();  // Extract the mode (before the first comma) and convert it to an integer
+    
+    ligne.remove(0, modeIndex + 1);  // Remove the mode and the comma from the string
+
+    // Now we read the next values separated by commas
+    motorYawHMI = ligne.substring(0, ligne.indexOf(',')).toFloat();  // Extract yaw (next part) and convert it to a float
+    ligne.remove(0, ligne.indexOf(',') + 1);  // Remove the yaw value and the comma
+
+    motorRollHMI = ligne.substring(0, ligne.indexOf(',')).toFloat();  // Extract roll (next part) and convert it to a float
+    ligne.remove(0, ligne.indexOf(',') + 1);  // Remove the roll value and the comma
+
+    motorPitchHMI = ligne.substring(0, ligne.indexOf(',')).toFloat();  // Extract pitch (next part) and convert it to a float
+    ligne.remove(0, ligne.indexOf(',') + 1);  // Remove the pitch value and the comma
+
+    // Extract the unused value (it will be at the end after all the commas) and convert it to float
+    float INUTIL = ligne.toFloat(); 
+    }
 }
 
 void setup() {
   Wire.begin();
-  Serial.begin(115200); //9600
+  Serial.begin(9600); //9600
 
   byte status = mpu.begin();
   Serial.print(F("MPU6050 status: "));
@@ -371,7 +379,6 @@ void setup() {
     DEBUG_SERIAL.println("Could not ping motor!");
     DEBUG_SERIAL.print("Last error code: ");
     DEBUG_SERIAL.println(dxl.getLastLibErrCode());
-
     return;
   }
 
@@ -387,9 +394,9 @@ void setup() {
   dxl.torqueOn(DXL_ID3);
 
   // Limit the maximum velocity in Position Control Mode. Use 0 for Max speed
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 70);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 70);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 70);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 90);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 90);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 90);
 
   DEBUG_SERIAL.println("Super Setup done.");
   DEBUG_SERIAL.print("Last error code: ");
@@ -399,12 +406,11 @@ void setup() {
   dxl.setGoalPosition(DXL_ID2, ANGLE_0_DXL_ID2 + 0, UNIT_DEGREE);
   dxl.setGoalPosition(DXL_ID3, ANGLE_0_DXL_ID3 + 0, UNIT_DEGREE);
 
-  pinMode(LED_BUILTIN, OUTPUT);  // LED intégrée sur D13
   delay(2000);
 }
 
 void loop() {
-
+ 
   receiveModeAndAngleFromHMI();
   sendAngleToHMI();
 
@@ -413,16 +419,13 @@ void loop() {
         motorYaw = motorYawHMI;
         motorPitch = motorPitchHMI;
         motorRoll = motorRollHMI;
-        digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
-        delay(1000);
-        digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
       
         sendNewPositionToMotors();
         break;
     case 2: //IMU
         mpu.update();  // Update sensor data
         angle_yaw=mpu.getAngleZ();
-        angle_roll=mpu.getAngleX();
+        angle_roll= mpu.getAngleX();
         angle_pitch=mpu.getAngleY();
 
         updatemotorposition(angle_yaw, angle_pitch, angle_roll, 0,  0, 0);
@@ -430,9 +433,6 @@ void loop() {
         break;
     case 3: // Object detection
         if (Serial.available() > 0) {
-          digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
-          delay(1000);
-          digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
           // Lire les valeurs envoyées par le Raspberry Pi
           float motorYaw = Serial.parseFloat();  // Lecture de yaw
           float motorPitch = Serial.parseFloat();  // Lecture de pitch
@@ -465,16 +465,14 @@ void loop() {
         motorPitch = 0;
         motorRoll = 0;
         sendNewPositionToMotors();
-        digitalWrite(LED_BUILTIN, HIGH);  // Allume la LED
-        delay(1000);
-        digitalWrite(LED_BUILTIN, LOW);   // Éteint la LED
         break;
     default:
         printf("PLEASE SELECT A MODE\n");
         break;
-}
+    }
 
 }
+
   
 
   
