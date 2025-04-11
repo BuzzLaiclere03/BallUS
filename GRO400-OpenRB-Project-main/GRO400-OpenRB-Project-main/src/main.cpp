@@ -113,7 +113,10 @@ float motorRollHMI =0;
 float motorYawYolo = 0;
 float motorPitchYolo = 0;
 
-#define LED_PIN 6  // Choisir un pin numérique
+const float alpha = 0.4f;  // Ajustable selon le niveau de réactivité souhaité
+
+float smoothedMotorYawYolo = 0.0f; // Valeur lissée pour la direction Yolo
+float smoothedMotorPitchYolo = 0.0f; // Valeur lissée pour la direction Yolo
 
 //-------------------------------------------------------------------- Initiation pour le calcule de yaw pitch roll -------------------------------------------------------------------------------------
 
@@ -429,6 +432,9 @@ void loop() {
 
   switch (mode) {
     case 1: // HMI control
+        dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 0);
+        dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 0);
+        dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 0);
         motorYaw = motorYawHMI;
         motorPitch = motorPitchHMI;
         motorRoll = motorRollHMI;
@@ -437,6 +443,9 @@ void loop() {
         break;
 
     case 2: // IMU
+        dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 90);
+        dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 90);
+        dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 90);
         mpu.update();  // Update sensor data
         angle_yaw = mpu.getAngleZ();
         angle_roll = mpu.getAngleX();
@@ -447,25 +456,16 @@ void loop() {
         break;
 
     case 3: { // Object detection
-        readAngle();
+        dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 40);
+        dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 40);
+        dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 40);
 
-        /*int desiredAngleMotor1 = qA + (0.2 * motorYawYolo + 0.1 * (motorYawYolo - oldMotorYaw));
-        int desiredAngleMotor2 = qB + (0.2 * motorPitchYolo + 0.1 * (motorPitchYolo - oldMotorPitch));
-        //int desiredAngleMotor3 = ANGLE_0_DXL_ID1;
-
-        dxl.setGoalPosition(DXL_ID1, desiredAngleMotor1, UNIT_DEGREE);
-        dxl.setGoalPosition(DXL_ID2, desiredAngleMotor2, UNIT_DEGREE);
-        //dxl.setGoalPosition(DXL_ID3, desiredAngleMotor3, UNIT_DEGREE);
-
-        oldMotorYaw = motorYaw;
-        oldMotorPitch = motorPitch;*/
-
-        // Facteur de lissage alpha entre 0 et 1. Plus il est proche de 1, plus la valeur est réactive
-        const float alpha = 0.2f;  // Ajustable selon le niveau de réactivité souhaité
 
         // Moyenne mobile exponentielle (EMA)
-        float smoothedMotorYawYolo = alpha * motorYawYolo + (1 - alpha) * smoothedMotorYawYolo;
-        float smoothedMotorPitchYolo = alpha * motorPitchYolo + (1 - alpha) * smoothedMotorPitchYolo;
+        smoothedMotorYawYolo = alpha/2 * motorYawYolo + (1 - alpha)/2 * smoothedMotorYawYolo;
+        smoothedMotorPitchYolo = alpha/2 * motorPitchYolo + (1 - alpha)/2 * smoothedMotorPitchYolo;
+
+        readAngle();
 
         int desiredAngleMotor1 = qA + smoothedMotorYawYolo;
         int desiredAngleMotor2 = qB + smoothedMotorPitchYolo;
@@ -484,6 +484,9 @@ void loop() {
         break;
 
     case 5: // Back to home (0,0,0)
+        dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 0);
+        dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 0);
+        dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 0);
         motorYaw = 0;
         motorPitch = 0;
         motorRoll = 0;
