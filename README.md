@@ -1,26 +1,28 @@
-# 🎓 Projet Gimbus2000 - Bällus
+# 🎓 Gimbus2000 Project - Bällus
 
-## 📘 Projet S4 en Génie robotique - Université de Sherbrooke
-Ce projet a été réalisé dans le cadre du cours de Projet de Session 4 en Génie Robotique à l’Université de Sherbrooke.  
-L’objectif était de concevoir un système de stabilisation de caméra à 3 axes pouvant suivre un point d'intérêt à l'aide d'une caméra Pi camera 3.
-
----
-
-# 🛠️ Guide complet pour l'installation, l'assemblage et l'initialisation du système
-
-[Home](https://github.com/BuzzLaiclere03/BallUS/wiki)
+## 📘 S4 Robotics Engineering Project – Université de Sherbrooke
+This project was developed as part of the 4th Semester Project course in Robotics Engineering at the Université de Sherbrooke.  
+The objective was to design a 3-axis camera stabilization system capable of tracking a point of interest using a Raspberry Pi Camera 3.
 
 ---
 
-# ⚙️ Performance du prototype
+# 🛠️ Complete Guide: Installation, Assembly & Initialization
 
-Le système a été testé dans différents scénarios. Voici un résumé des performances mesurées :
+To help you get started with the Gimbus2000, we’ve prepared a detailed guide that walks you through the full setup process — from mechanical assembly to software configuration.
 
-- ✅ Précision de détection de l'accéléromètre : 
-- ⚡ Temps de réponse du système : 
-
-Des améliorations futures pourraient inclure l’optimisation du traitement en temps réel et l’ajout d’un mode sans fil.
+📖 [Read the Wiki](https://github.com/BuzzLaiclere03/BallUS/wiki)
 
 ---
 
-*© Université de Sherbrooke - Projet Gimbus2000 - 2025*
+# ⚙️ Prototype Performance
+
+The system has been tested in various conditions. Here’s a summary of its current capabilities:
+
+- ✅ Accelerometer detection accuracy:  
+- ⚡ System response time:  
+
+Future improvements may include optimizing real-time processing and adding wireless control capabilities.
+
+---
+
+*© Université de Sherbrooke – Gimbus2000 Project – 2025*
