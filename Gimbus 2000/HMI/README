@@ -1,0 +1,14 @@
+requis :
+- Librairie
+	-Pyside 6
+	- liibcamera
+	- cv2
+	- picamera
+	- matplotliib
+	- serial
+	- ultralytics
+	- threading
+	- datetime
+	- numpy
+- version python : 3.11.2
+
