@@ -8,10 +8,7 @@ L’objectif était de concevoir un système de stabilisation de caméra à 3 ax
 
 # 🛠️ Guide complet pour l'installation, l'assemblage et l'initialisation du système
 
-Ce guide comprend :
-
-
-> 📄 Consultez le fichier [GUIDE.md](./GUIDE.md) pour tous les détails.
+- [ Home](Home)
 
 ---
 
