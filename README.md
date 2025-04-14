@@ -3,6 +3,7 @@
 ## 📘 S4 Robotics Engineering Project – Université de Sherbrooke
 This project was developed as part of the 4th Semester Project course in Robotics Engineering at the Université de Sherbrooke.  
 The objective was to design a 3-axis camera stabilization system capable of tracking a point of interest using a Raspberry Pi Camera 3.
+![image](https://github.com/user-attachments/assets/3880d141-a3b0-428c-833a-f41b27a6121b)
 
 ---
 
