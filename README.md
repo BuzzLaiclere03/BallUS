@@ -14,15 +14,4 @@ To help you get started with the Gimbus2000, we’ve prepared a detailed guide t
 
 ---
 
-# ⚙️ Prototype Performance
-
-The system has been tested in various conditions. Here’s a summary of its current capabilities:
-
-- ✅ Accelerometer detection accuracy:  
-- ⚡ System response time:  
-
-Future improvements may include optimizing real-time processing and adding wireless control capabilities.
-
----
-
 *© Université de Sherbrooke – Gimbus2000 Project – 2025*
