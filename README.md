@@ -1,5 +1,5 @@
 # 🎓 Gimbus2000 Project - Bällus
-![BÄLLUS Logo] (https://github.com/BuzzLaiclere03/BallUS/blob/8cae7cf87a5786b5fb68cd8299ea4ed6ecec6577/Media/logo.png).
+![BÄLLUS Logo](https://github.com/BuzzLaiclere03/BallUS/blob/8cae7cf87a5786b5fb68cd8299ea4ed6ecec6577/Media/logo.png).
 ## 📘 S4 Robotics Engineering Project – Université de Sherbrooke
 This project was developed as part of the 4th Semester Project course in Robotics Engineering at the Université de Sherbrooke.  
 The objective was to design a 3-axis camera stabilization system capable of tracking a point of interest using a Raspberry Pi Camera 3.
