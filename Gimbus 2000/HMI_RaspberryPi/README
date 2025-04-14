@@ -1,14 +1,14 @@
-requis :
-- Librairie
-	-Pyside 6
-	- liibcamera
-	- cv2
-	- picamera
-	- matplotliib
-	- serial
-	- ultralytics
-	- threading
-	- datetime
-	- numpy
-- version python : 3.11.2
+- Required Libraries:
+    - Pyside6
+    - libcamera
+    - cv2
+    - picamera
+    - matplotlib
+    - serial
+    - ultralytics
+    - threading
+    - datetime
+    - numpy
+
+- Python Version: 3.11.2
 
