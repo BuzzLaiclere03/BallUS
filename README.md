@@ -8,7 +8,7 @@ L’objectif était de concevoir un système de stabilisation de caméra à 3 ax
 
 # 🛠️ Guide complet pour l'installation, l'assemblage et l'initialisation du système
 
-- [ Home](Home)
+[Home](https://github.com/BuzzLaiclere03/BallUS/wiki)
 
 ---
 
