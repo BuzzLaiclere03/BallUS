@@ -1,4 +1,4 @@
-// Created by Ballus on 2024-04-10.
+// Created by Ballus on 2024-04-13.
 #include <Dynamixel2Arduino.h>
 #include <math.h>
 #include <Wire.h>
@@ -77,24 +77,24 @@ float modMoteur1 = 0;
 float modMoteur2 = 0;
 float modMoteur3 = 0;
 
-//Modifier ces valeurs selon le position 0, 0, 0 de l'IMU
+// Modify these values according to the IMU's 0, 0, 0 position
 float initialYaw = 0;
 float initialPitch = 0;
 float initialRoll = 0;
 
-//Initialisation des variables pour tenir en memoire la derniere position du moteur pour savoir si on doit envoyer une nouvelle position ou le seuil n'est pas dépassé
+// Initialize variables to track the last motor position and decide if an update is needed based on threshold
 float lastAngle1 = 0;
 float lastAngle2 = 0;
 float lastAngle3 = 0;
 
 int seuil = 0; //degree
 
-// initiation pour IMU
+// Initialization for IMU
 MPU6050 mpu(Wire);
 unsigned long timer = 0;
 unsigned long timer2 = 0;
 
-// initiation de la mémoire des angle 
+// Initialize angle memory
 float last_Yaw=0;
 float last_pitch=0;
 float last_Roll=0;
@@ -113,17 +113,15 @@ float motorRollHMI =0;
 float motorYawYolo = 0;
 float motorPitchYolo = 0;
 
-const float alpha = 0.4f;  // Ajustable selon le niveau de réactivité souhaité
+const float alpha = 0.4f;  // Adjustable according to the desired level of responsiveness
 
-float smoothedMotorYawYolo = 0.0f; // Valeur lissée pour la direction Yolo
-float smoothedMotorPitchYolo = 0.0f; // Valeur lissée pour la direction Yolo
+float smoothedMotorYawYolo = 0.0f;   // Smoothed value for the Yolo yaw direction
+float smoothedMotorPitchYolo = 0.0f; // Smoothed value for the Yolo pitch direction
 
-//-------------------------------------------------------------------- Initiation pour le calcule de yaw pitch roll -------------------------------------------------------------------------------------
+//-------------------------------------------------------------------- Initialization for the calculation of yaw, pitch, and roll -------------------------------------------------------------------------------------
 
 // I2Cdev and MPU6050 must be installed as libraries, or else the .cpp/.h files
 // for both classes must be in the include path of your project
- 
-//MPU6050 accelgyro;
  
 int16_t ax, ay, az;
 int16_t gx, gy, gz;
@@ -366,13 +364,12 @@ void setup() {
   Wire.write(0);
   Wire.endTransmission(true);
 
-  // put your setup code here, to run once:
-  delay(2000);    // Délai additionnel pour avoir le temps de lire les messages sur la console.
+  delay(2000);   
   DEBUG_SERIAL.println("Starting position control ...");
   
   // Use UART port of DYNAMIXEL Shield to debug.
   DEBUG_SERIAL.begin(115200);
-  while(!DEBUG_SERIAL); // On attend que la communication série pour les messages soit prête.
+  while(!DEBUG_SERIAL); 
 
   // Set Port baudrate to 57600bps. This has to match with DYNAMIXEL baudrate.
   dxl.begin(57600);
@@ -461,7 +458,7 @@ void loop() {
         dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID3, 40);
 
 
-        // Moyenne mobile exponentielle (EMA)
+        // IIR Filter
         smoothedMotorYawYolo = alpha/2 * motorYawYolo + (1 - alpha)/2 * smoothedMotorYawYolo;
         smoothedMotorPitchYolo = alpha/2 * motorPitchYolo + (1 - alpha)/2 * smoothedMotorPitchYolo;
 
@@ -473,14 +470,14 @@ void loop() {
         dxl.setGoalPosition(DXL_ID1, desiredAngleMotor1, UNIT_DEGREE);
         dxl.setGoalPosition(DXL_ID2, desiredAngleMotor2, UNIT_DEGREE);
 
-        // Mise à jour de l’ancien état
+        // Update of the previous state
         oldMotorYaw = motorYaw;
         oldMotorPitch = motorPitch;
         break;
     }
 
     case 4:
-        printf("Gros fun\n");
+        printf("ADD A NEW MODE\n");
         break;
 
     case 5: // Back to home (0,0,0)
